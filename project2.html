@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Food Sharing Platform</title>
+<style>
+body{
+font-family:Arial;
+margin:0;
+text-align:center;
+background-image: url("https://t4.ftcdn.net/jpg/02/92/20/37/360_F_292203735_CSsyqyS6A4Z9Czd4Msf7qZEhoxjpzZl1.jpg");
+color:white;
+transition:0.3s;
+}
+.dark{background:#111;}
+.container{display:none;padding:20px;}
+.active{display:block;}
+.card{
+background:rgba(255,255,255,0.15);
+padding:20px;
+border-radius:15px;
+display:inline-block;
+width:95%;
+max-width:380px;
+margin-top:20px;
+}
+input,select{
+padding:8px;margin:5px;width:90%;
+border-radius:8px;border:none;
+}
+button{
+padding:8px 15px;margin:5px;
+border:none;border-radius:20px;
+cursor:pointer;font-weight:bold;
+background:linear-gradient(to right,#ff512f,#dd2476);
+color:white;
+}
+button:hover{transform:scale(1.05);}
+.item-card{
+background:white;color:black;
+padding:10px;margin:10px;
+border-radius:10px;
+}
+img{max-width:100px;border-radius:10px;}
+</style>
+</head>
+<body>
+
+<h1>🍽 Ultimate Food Sharing</h1>
+
+<!-- LOGIN -->
+<div id="login" class="container active">
+    <div class="card">
+        <h2>Login</h2>
+        <input type="text" id="loginUser" placeholder="Username">
+        <input type="password" id="loginPass" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <p>New user? <a onclick="showPage('signup')" style="color:yellow;">Create Account</a></p>
+        <p id="loginMsg"></p>
+    </div>
+</div>
+
+<!-- SIGNUP -->
+<div id="signup" class="container">
+    <div class="card">
+        <h2>Create Account</h2>
+        <input type="text" id="signupUser" placeholder="Username">
+        <input type="tel" id="signupMobile" placeholder="Mobile Number" maxlength="10">
+        <input type="password" id="signupPass" placeholder="Password">
+        <input type="password" id="signupConfirmPass" placeholder="Confirm Password">
+        <button onclick="signup()">Register</button>
+        <p id="signupMsg"></p>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="container">
+<div class="card">
+<h2>Dashboard</h2>
+<button onclick="showPage('seller')">Seller</button>
+<button onclick="showPage('buyer');displayItems()">Buyer</button>
+<button onclick="showPage('orders');displayOrders()">My Orders</button>
+<button onclick="showPage('wishlist');loadWishlist()">Wishlist</button>
+<button onclick="showPage('profile');loadProfile()">Profile</button>
+<button onclick="showPage('admin');loadAdmin()">Admin</button>
+<button onclick="toggleDark()">Dark Mode</button>
+<button onclick="logout()">Logout</button>
+</div></div>
+
+<!-- SELLER -->
+<div id="seller" class="container">
+<div class="card">
+<h2>Add Food</h2>
+<input id="itemName" placeholder="Food Name">
+<input type="number" id="itemQty" placeholder="Quantity">
+<input type="number" id="itemPrice" placeholder="Price ₹">
+<input type="file" id="itemImage" accept="image/*">
+<button onclick="addItem()">Submit</button>
+<p id="sellerMsg"></p>
+<button onclick="sellerStats()">View Sales</button>
+<button onclick="showPage('dashboard')">Back</button>
+</div></div>
+
+<!-- BUYER -->
+<div id="buyer" class="container">
+<div class="card">
+<h2>Available Items</h2>
+<input id="searchInput" placeholder="Search..." onkeyup="displayItems()">
+<div id="itemsList"></div>
+<button onclick="showPage('dashboard')">Back</button>
+</div></div>
+
+<!-- ORDERS -->
+<div id="orders" class="container">
+<div class="card">
+<h2>My Orders</h2>
+<div id="ordersList"></div>
+<button onclick="showPage('dashboard')">Back</button>
+</div></div>
+
+<!-- WISHLIST -->
+<div id="wishlist" class="container">
+<div class="card">
+<h2>Wishlist</h2>
+<div id="wishlistList"></div>
+<button onclick="showPage('dashboard')">Back</button>
+</div></div>
+
+<!-- PROFILE -->
+<div id="profile" class="container">
+<div class="card">
+<h2>My Profile</h2>
+<p id="profileInfo"></p>
+<button onclick="showPage('dashboard')">Back</button>
+</div></div>
+
+<!-- ADMIN -->
+<div id="admin" class="container">
+<div class="card">
+<h2>Admin Panel</h2>
+<div id="adminData"></div>
+<button onclick="showPage('dashboard')">Back</button>
+</div></div>
+
+<script>
+let currentUser=null;
+
+function showPage(id){
+document.querySelectorAll('.container').forEach(c=>c.classList.remove('active'));
+document.getElementById(id).classList.add('active');
+}
+function signup() {
+    let user = signupUser.value.trim();
+    let mobile = signupMobile.value.trim();
+    let pass = signupPass.value;
+    let confirmPass = signupConfirmPass.value;
+
+    if (!user || !mobile || !pass || !confirmPass) {
+        signupMsg.innerHTML = "<span class='error'>All fields are compulsory!</span>";
+        return;
+    }
+
+    if (!/^[0-9]{10}$/.test(mobile)) {
+        signupMsg.innerHTML = "<span class='error'>Mobile must be 10 digits!</span>";
+        return;
+    }
+
+    if (pass !== confirmPass) {
+        signupMsg.innerHTML = "<span class='error'>Passwords do not match!</span>";
+        return;
+    }
+
+    // Get existing users or create empty array
+    let users = JSON.parse(localStorage.getItem("users")) || [];
+
+    // Check if username already exists
+    if (users.some(u => u.username === user)) {
+        signupMsg.innerHTML = "<span class='error'>Username already exists!</span>";
+        return;
+    }
+
+    // Save new user
+    users.push({ username: user, password: pass, mobile: mobile });
+    localStorage.setItem("users", JSON.stringify(users));
+
+    signupMsg.innerHTML = "<span class='success'>Account Created! Please login.</span>";
+    setTimeout(() => showPage("login"), 1000);
+}
+
+function login() {
+    let user = loginUser.value.trim();
+    let pass = loginPass.value;
+
+    let users = JSON.parse(localStorage.getItem("users")) || [];
+
+    // Find matching user
+    let found = users.find(u => u.username === user && u.password === pass);
+
+    if (found) {
+        loginMsg.innerHTML = "<span class='success'>Login Successful!</span>";
+        currentUser = found.username;
+        setTimeout(() => showPage("dashboard"), 1000);
+    } else {
+        loginMsg.innerHTML = "Invalid Credentials!";
+    }
+}
+
+function logout(){
+currentUser=null;
+showPage("login");
+}
+
+function addItem(){
+let items=JSON.parse(localStorage.getItem("foodItems"))||[];
+let reader=new FileReader();
+reader.onload=function(){
+items.push({
+seller:currentUser,
+name:itemName.value,
+qty:Number(itemQty.value),
+price:Number(itemPrice.value),
+image:reader.result
+});
+localStorage.setItem("foodItems",JSON.stringify(items));
+sellerMsg.innerHTML="Item Added!";
+};
+reader.readAsDataURL(itemImage.files[0]);
+}
+
+function displayItems(){
+let items=JSON.parse(localStorage.getItem("foodItems"))||[];
+itemsList.innerHTML="";
+items.forEach((item,i)=>{
+if(item.name.toLowerCase().includes(searchInput.value.toLowerCase())){
+itemsList.innerHTML+=`
+<div class="item-card">
+<img src="${item.image}"><br>
+<b>${item.name}</b><br>
+Seller: ${item.seller}<br>
+Qty: ${item.qty}<br>
+Price: ₹${item.price}<br>
+<button onclick="orderItem(${i})">Order</button>
+<button onclick="addWishlist(${i})">❤️</button>
+</div>`;
+}
+});
+}
+
+function orderItem(i){
+let items=JSON.parse(localStorage.getItem("foodItems"));
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+let item=items[i];
+
+let qty=Number(prompt("Enter Quantity"));
+if(isNaN(qty) || qty<=0){
+alert("Invalid quantity!");
+return;
+}
+if(qty>item.qty){
+alert("Not enough stock!");
+return;
+}
+
+let coupon=prompt("Enter Coupon (SAVE10)");
+let finalPrice=item.price*qty;
+if(coupon==="SAVE10") finalPrice*=0.9;
+
+orders.push({
+buyer:currentUser,
+seller:item.seller,
+name:item.name,
+price:finalPrice,
+quantity:qty,
+image:item.image,
+status:"Preparing",
+rating:null
+});
+
+item.qty-=qty;
+if(item.qty<=0) items.splice(i,1);
+
+localStorage.setItem("foodItems",JSON.stringify(items));
+localStorage.setItem("orders",JSON.stringify(orders));
+alert("Payment Successful 💳");
+displayOrders();
+showPage("orders");
+}
+function displayOrders(){
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+ordersList.innerHTML="";
+orders.forEach((o,i)=>{
+if(o.buyer===currentUser){
+ordersList.innerHTML+=`
+<div class="item-card">
+<img src="${o.image}"><br>
+<b>${o.name}</b><br>
+Quantity: ${o.quantity}<br>
+Price: ₹${o.price}<br>
+Status: ${o.status}<br>
+<button onclick="completeOrder(${i})">Mark Delivered</button>
+<select onchange="rate(${i},this.value)">
+<option value="">Rate</option>
+<option>1 ⭐</option>
+<option>2 ⭐⭐</option>
+<option>3 ⭐⭐⭐</option>
+<option>4 ⭐⭐⭐⭐</option>
+<option>5 ⭐⭐⭐⭐⭐</option>
+</select>
+</div>`;
+}
+});
+}
+
+function completeOrder(i){
+let orders=JSON.parse(localStorage.getItem("orders"));
+orders[i].status="Delivered 🚚";
+localStorage.setItem("orders",JSON.stringify(orders));
+displayOrders();
+}
+
+function rate(i,val){
+let orders=JSON.parse(localStorage.getItem("orders"));
+orders[i].rating=val;
+localStorage.setItem("orders",JSON.stringify(orders));
+alert("Thanks!");
+}
+
+function addWishlist(i){
+let items=JSON.parse(localStorage.getItem("foodItems"));
+let wish=JSON.parse(localStorage.getItem("wishlist"))||[];
+wish.push(items[i]);
+localStorage.setItem("wishlist",JSON.stringify(wish));
+alert("Added to Wishlist");
+}
+
+function loadWishlist(){
+let wish=JSON.parse(localStorage.getItem("wishlist"))||[];
+wishlistList.innerHTML="";
+wish.forEach(w=>{
+wishlistList.innerHTML+=`<div class="item-card"><b>${w.name}</b> ₹${w.price}</div>`;
+});
+}
+
+function loadProfile(){
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+let count=orders.filter(o=>o.buyer===currentUser).length;
+profileInfo.innerHTML=`Username: ${currentUser}<br>Total Orders: ${count}`;
+}
+
+function loadAdmin(){
+let users=JSON.parse(localStorage.getItem("users"))||[];
+let items=JSON.parse(localStorage.getItem("foodItems"))||[];
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+adminData.innerHTML=`
+Users: ${users.length}<br>
+Items: ${items.length}<br>
+Orders: ${orders.length}`;
+}
+
+function sellerStats(){
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+let total=0;
+orders.forEach(o=>{ if(o.seller===currentUser) total+=o.price; });
+sellerMsg.innerHTML="Total Sales: ₹"+total;
+}
+
+function toggleDark(){document.body.classList.toggle("dark");}
+</script>
+</body>
+</html>

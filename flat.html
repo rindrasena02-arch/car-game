@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>ε-NFA to DFA Simulator</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #eef2f7;
+    color: #1f2937;
+}
+
+.container {
+    width: 95%;
+    max-width: 1250px;
+    margin: 25px auto;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+h2 {
+    margin-top: 0;
+    color: #1e3a8a;
+}
+
+.card {
+    background: white;
+    padding: 22px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.10);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+input,
+textarea,
+select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #b8c0cc;
+    border-radius: 6px;
+    font-size: 15px;
+}
+
+textarea {
+    min-height: 130px;
+    resize: vertical;
+}
+
+.help {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 5px;
+}
+
+button {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+    margin: 5px;
+}
+
+.primary {
+    background: #2563eb;
+    color: white;
+}
+
+.primary:hover {
+    background: #1d4ed8;
+}
+
+.secondary {
+    background: #374151;
+    color: white;
+}
+
+.success {
+    background: #059669;
+    color: white;
+}
+
+.danger {
+    background: #dc2626;
+    color: white;
+}
+
+.example {
+    background: #eff6ff;
+    border-left: 5px solid #2563eb;
+    padding: 12px;
+    margin-top: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+th,
+td {
+    border: 1px solid #d1d5db;
+    padding: 10px;
+    text-align: center;
+}
+
+th {
+    background: #1e293b;
+    color: white;
+}
+
+.start-state {
+    font-weight: bold;
+}
+
+.final-state {
+    font-weight: bold;
+}
+
+.step {
+    border-left: 5px solid #2563eb;
+    background: #f8fafc;
+    padding: 15px;
+    margin: 12px 0;
+    border-radius: 6px;
+}
+
+.step h3 {
+    margin-top: 0;
+}
+
+.result {
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.accepted {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.rejected {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.error {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.diagram-container {
+    width: 100%;
+    overflow-x: auto;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 15px;
+}
+
+svg {
+    width: 100%;
+    min-width: 750px;
+    height: 500px;
+}
+
+.state-circle {
+    fill: white;
+    stroke: #1f2937;
+    stroke-width: 3;
+}
+
+.state-circle.final {
+    stroke-width: 5;
+}
+
+.state-circle.active {
+    fill: #93c5fd;
+    stroke: #1d4ed8;
+}
+
+.state-label {
+    font-size: 17px;
+    font-weight: bold;
+    text-anchor: middle;
+    dominant-baseline: middle;
+}
+
+.edge {
+    stroke: #374151;
+    stroke-width: 2;
+    fill: none;
+}
+
+.edge-label {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.small-note {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.flex-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.simulation-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+.simulation-step {
+    background: #f1f5f9;
+    padding: 14px;
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.current {
+    background: #dbeafe;
+    border-left: 5px solid #2563eb;
+}
+
+@media(max-width:700px) {
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .container {
+        width: 96%;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>ε-NFA → DFA Simulator</h1>
+
+
+<!-- ================= INPUT SECTION ================= -->
+
+<div class="card">
+
+<h2>1. Enter / Edit ε-NFA</h2>
+
+<div class="form-grid">
+
+<div>
+
+<label>States</label>
+
+<input
+    id="statesInput"
+    value="q0,q1,q2"
+    placeholder="Example: q0,q1,q2,q3">
+
+<p class="help">
+Separate states using commas.
+</p>
+
+</div>
+
+
+<div>
+
+<label>Alphabet</label>
+
+<input
+    id="alphabetInput"
+    value="0,1"
+    placeholder="Example: 0,1">
+
+<p class="help">
+Do not include ε here.
+</p>
+
+</div>
+
+
+<div>
+
+<label>Start State</label>
+
+<input
+    id="startInput"
+    value="q0"
+    placeholder="Example: q0">
+
+</div>
+
+
+<div>
+
+<label>Final States</label>
+
+<input
+    id="finalInput"
+    value="q2"
+    placeholder="Example: q2">
+
+<p class="help">
+For multiple final states: q2,q3
+</p>
+
+</div>
+
+</div>
+
+
+<br>
+
+<label>Transitions</label>
+
+<textarea id="transitionInput">q0,ε,q1
+q1,0,q1
+q1,1,q2</textarea>
+
+<p class="help">
+Use one transition per line:
+<b>from,input,to</b>
+<br>
+For epsilon use <b>ε</b> or <b>e</b>.
+<br>
+Multiple destinations can be separated by commas.
+</p>
+
+
+<div class="example">
+
+<b>Example:</b>
+
+<pre>
+q0,ε,q1
+q1,0,q1
+q1,1,q2
+</pre>
+
+</div>
+
+
+<div class="flex-buttons">
+
+<button class="primary" onclick="generateDFA()">
+Generate DFA
+</button>
+
+<button class="secondary" onclick="loadExample()">
+Load Example
+</button>
+
+<button class="danger" onclick="clearAll()">
+Clear
+</button>
+
+</div>
+
+</div>
+
+
+<!-- ================= NFA TABLE ================= -->
+
+<div class="card">
+
+<h2>2. NFA Transition Table</h2>
+
+<div id="nfaTable">
+    Enter the NFA information and click "Generate DFA".
+</div>
+
+</div>
+
+
+<!-- ================= EPSILON CLOSURE ================= -->
+
+<div class="card">
+
+<h2>3. ε-Closure Calculation</h2>
+
+<div id="closureSection">
+    ε-closure will appear here.
+</div>
+
+</div>
+
+
+<!-- ================= SUBSET CONSTRUCTION ================= -->
+
+<div class="card">
+
+<h2>4. Step-by-Step ε-NFA → DFA Conversion</h2>
+
+<div id="conversionSteps">
+    Conversion steps will appear here.
+</div>
+
+</div>
+
+
+<!-- ================= DFA TABLE ================= -->
+
+<div class="card">
+
+<h2>5. Automatically Generated DFA Transition Table</h2>
+
+<div id="dfaTable">
+    DFA table will appear here.
+</div>
+
+</div>
+
+
+<!-- ================= DFA DIAGRAM ================= -->
+
+<div class="card">
+
+<h2>6. Automatically Generated DFA Diagram</h2>
+
+<div class="diagram-container">
+
+<svg id="dfaSvg" viewBox="0 0 1000 500">
+
+<text
+    x="500"
+    y="250"
+    text-anchor="middle"
+    font-size="20">
+
+DFA diagram will appear here
+
+</text>
+
+</svg>
+
+</div>
+
+</div>
+
+
+<!-- ================= SIMULATION ================= -->
+
+<div class="card">
+
+<h2>7. DFA Simulation</h2>
+
+<label>Enter Input String</label>
+
+<input
+    id="simulationInput"
+    placeholder="Example: 001"
+>
+
+<div class="simulation-controls">
+
+<button class="primary" onclick="startSimulation()">
+Start Simulation
+</button>
+
+<button class="secondary" onclick="nextSimulationStep()">
+Next Step
+</button>
+
+<button class="danger" onclick="resetSimulation()">
+Reset
+</button>
+
+</div>
+
+<div id="simulationResult"></div>
+
+<div id="simulationSteps"></div>
+
+</div>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   GLOBAL DATA
+========================================================= */
+
+let nfa = {
+    states: [],
+    alphabet: [],
+    start: "",
+    finals: [],
+    transitions: {}
+};
+
+let dfa = {
+    states: [],
+    alphabet: [],
+    start: "",
+    finals: [],
+    transitions: {}
+};
+
+let simulation = {
+    input: "",
+    position: 0,
+    current: "",
+    running: false
+};
+
+
+/* =========================================================
+   LOAD EXAMPLE
+========================================================= */
+
+function loadExample() {
+
+    document.getElementById("statesInput").value =
+        "q0,q1,q2";
+
+    document.getElementById("alphabetInput").value =
+        "0,1";
+
+    document.getElementById("startInput").value =
+        "q0";
+
+    document.getElementById("finalInput").value =
+        "q2";
+
+    document.getElementById("transitionInput").value =
+`q0,ε,q1
+q1,0,q1
+q1,1,q2`;
+
+    generateDFA();
+}
+
+
+/* =========================================================
+   CLEAR
+========================================================= */
+
+function clearAll() {
+
+    document.getElementById("statesInput").value = "";
+
+    document.getElementById("alphabetInput").value = "";
+
+    document.getElementById("startInput").value = "";
+
+    document.getElementById("finalInput").value = "";
+
+    document.getElementById("transitionInput").value = "";
+
+    document.getElementById("nfaTable").innerHTML = "";
+
+    document.getElementById("closureSection").innerHTML = "";
+
+    document.getElementById("conversionSteps").innerHTML = "";
+
+    document.getElementById("dfaTable").innerHTML = "";
+
+    document.getElementById("simulationSteps").innerHTML = "";
+
+    document.getElementById("simulationResult").innerHTML = "";
+
+    resetDiagram();
+
+}
+
+
+/* =========================================================
+   PARSE NFA
+========================================================= */
+
+function parseNFA() {
+
+    const states = document
+        .getElementById("statesInput")
+        .value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+    const alphabet = document
+        .getElementById("alphabetInput")
+        .value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+    const start =
+        document.getElementById("startInput")
+        .value.trim();
+
+    const finals =
+        document.getElementById("finalInput")
+        .value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+    nfa = {
+        states,
+        alphabet,
+        start,
+        finals,
+        transitions: {}
+    };
+
+    states.forEach(state => {
+
+        nfa.transitions[state] = {};
+
+        [...alphabet, "ε"].forEach(symbol => {
+
+            nfa.transitions[state][symbol] = [];
+
+        });
+
+    });
+
+
+    const lines =
+        document
+        .getElementById("transitionInput")
+        .value
+        .split("\n")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+
+    lines.forEach(line => {
+
+        let parts = line.split(",");
+
+        if (parts.length < 3) return;
+
+        let from = parts[0].trim();
+
+        let symbol = parts[1].trim();
+
+        let toStates =
+            parts
+            .slice(2)
+            .join(",")
+            .split(",")
+            .map(x => x.trim())
+            .filter(Boolean);
+
+        if (symbol.toLowerCase() === "e") {
+            symbol = "ε";
+        }
+
+        if (!nfa.transitions[from]) {
+            nfa.transitions[from] = {};
+        }
+
+        if (!nfa.transitions[from][symbol]) {
+            nfa.transitions[from][symbol] = [];
+        }
+
+        toStates.forEach(to => {
+
+            if (!nfa.transitions[from][symbol].includes(to)) {
+
+                nfa.transitions[from][symbol].push(to);
+
+            }
+
+        });
+
+    });
+
+}
+
+
+/* =========================================================
+   EPSILON CLOSURE
+========================================================= */
+
+function epsilonClosure(states) {
+
+    let closure = new Set(states);
+
+    let stack = [...states];
+
+    while (stack.length > 0) {
+
+        let state = stack.pop();
+
+        let eps =
+            nfa.transitions[state] &&
+            nfa.transitions[state]["ε"]
+            ? nfa.transitions[state]["ε"]
+            : [];
+
+        eps.forEach(next => {
+
+            if (!closure.has(next)) {
+
+                closure.add(next);
+
+                stack.push(next);
+
+            }
+
+        });
+
+    }
+
+    return [...closure].sort();
+
+}
+
+
+/* =========================================================
+   MOVE
+========================================================= */
+
+function move(states, symbol) {
+
+    let result = new Set();
+
+    states.forEach(state => {
+
+        let destinations =
+            nfa.transitions[state] &&
+            nfa.transitions[state][symbol]
+            ? nfa.transitions[state][symbol]
+            : [];
+
+        destinations.forEach(destination => {
+
+            result.add(destination);
+
+        });
+
+    });
+
+    return [...result];
+
+}
+
+
+/* =========================================================
+   SET KEY
+========================================================= */
+
+function setKey(states) {
+
+    return states.slice().sort().join(",");
+
+}
+
+
+/* =========================================================
+   GENERATE DFA
+========================================================= */
+
+function generateDFA() {
+
+    try {
+
+        parseNFA();
+
+        if (!nfa.states.length) {
+
+            alert("Please enter NFA states.");
+
+            return;
+
+        }
+
+        if (!nfa.start) {
+
+            alert("Please enter a start state.");
+
+            return;
+
+        }
+
+
+        generateNFATable();
+
+        generateClosures();
+
+        subsetConstruction();
+
+        generateDFATable();
+
+        generateDiagram();
+
+        resetSimulation();
+
+    }
+
+    catch(error) {
+
+        alert("Error: " + error.message);
+
+    }
+
+}
+
+
+/* =========================================================
+   NFA TABLE
+========================================================= */
+
+function generateNFATable() {
+
+    let html = "<table>";
+
+    html += "<tr>";
+
+    html += "<th>State</th>";
+
+    nfa.alphabet.forEach(symbol => {
+
+        html += `<th>${symbol}</th>`;
+
+    });
+
+    html += "<th>ε</th>";
+
+    html += "</tr>";
+
+
+    nfa.states.forEach(state => {
+
+        html += "<tr>";
+
+        html += `<td>${state}</td>`;
+
+        nfa.alphabet.forEach(symbol => {
+
+            let values =
+                nfa.transitions[state]?.[symbol] || [];
+
+            html += `<td>${values.join(", ") || "—"}</td>`;
+
+        });
+
+        let eps =
+            nfa.transitions[state]?.["ε"] || [];
+
+        html += `<td>${eps.join(", ") || "—"}</td>`;
+
+        html += "</tr>";
+
+    });
+
+    html += "</table>";
+
+    document.getElementById("nfaTable").innerHTML = html;
+
+}
+
+
+/* =========================================================
+   CLOSURE DISPLAY
+========================================================= */
+
+function generateClosures() {
+
+    let html = "";
+
+    nfa.states.forEach(state => {
+
+        let closure =
+            epsilonClosure([state]);
+
+        html += `
+            <div class="step">
+                <b>ε-closure(${state})</b>
+                =
+                { ${closure.join(", ")} }
+            </div>
+        `;
+
+    });
+
+    document.getElementById("closureSection").innerHTML =
+        html;
+
+}
+
+
+/* =========================================================
+   SUBSET CONSTRUCTION
+========================================================= */
+
+function subsetConstruction() {
+
+    dfa = {
+
+        states: [],
+
+        alphabet: [...nfa.alphabet],
+
+        start: "",
+
+        finals: [],
+
+        transitions: {}
+
+    };
+
+
+    let startClosure =
+        epsilonClosure([nfa.start]);
+
+    let startKey =
+        setKey(startClosure);
+
+
+    dfa.start = startKey;
+
+    let queue = [startClosure];
+
+    let visited = new Set();
+
+    let steps = [];
+
+    while (queue.length > 0) {
+
+        let current = queue.shift();
+
+        let currentKey =
+            setKey(current);
+
+        if (visited.has(currentKey)) {
+            continue;
+        }
+
+        visited.add(currentKey);
+
+        dfa.states.push(currentKey);
+
+        dfa.transitions[currentKey] = {};
+
+
+        let stepHTML = `
+            <div class="step">
+
+            <h3>Step ${steps.length + 1}</h3>
+
+            <p>
+            Current DFA state:
+            <b>{${current.join(", ")}}</b>
+            </p>
+        `;
+
+
+        nfa.alphabet.forEach(symbol => {
+
+            let moved =
+                move(current, symbol);
+
+            let closure =
+                epsilonClosure(moved);
+
+            let nextKey =
+                setKey(closure);
+
+
+            if (!nextKey) {
+
+                nextKey = "∅";
+
+            }
+
+
+            dfa.transitions[currentKey][symbol] =
+                nextKey;
+
+
+            stepHTML += `
+
+                <p>
+
+                On input
+                <b>${symbol}</b>:
+
+                <br>
+
+                move({${current.join(", ")}} , ${symbol})
+                =
+                {${moved.join(", ") || "∅"}}
+
+                <br>
+
+                ε-closure
+                =
+                {${closure.join(", ") || "∅"}}
+
+                <br>
+
+                Therefore:
+                <b>{${nextKey === "∅" ? "∅" : nextKey}}</b>
+
+                </p>
+            `;
+
+
+            if (
+                nextKey !== "∅" &&
+                !visited.has(nextKey)
+            ) {
+
+                queue.push(closure);
+
+            }
+
+        });
+
+
+        stepHTML += "</div>";
+
+        steps.push(stepHTML);
+
+    }
+
+
+    /*
+       Add dead state if required
+    */
+
+    let needsDeadState = false;
+
+    dfa.states.forEach(state => {
+
+        nfa.alphabet.forEach(symbol => {
+
+            if (
+                dfa.transitions[state][symbol] === "∅"
+            ) {
+
+                needsDeadState = true;
+
+            }
+
+        });
+
+    });
+
+
+    if (needsDeadState) {
+
+        if (!dfa.states.includes("∅")) {
+
+            dfa.states.push("∅");
+
+            dfa.transitions["∅"] = {};
+
+            nfa.alphabet.forEach(symbol => {
+
+                dfa.transitions["∅"][symbol] = "∅";
+
+            });
+
+        }
+
+    }
+
+
+    /*
+       Final states
+    */
+
+    dfa.states.forEach(state => {
+
+        if (state === "∅") return;
+
+        let members =
+            state.split(",");
+
+        let isFinal =
+            members.some(member =>
+                nfa.finals.includes(member)
+            );
+
+        if (isFinal) {
+
+            dfa.finals.push(state);
+
+        }
+
+    });
+
+
+    document.getElementById("conversionSteps").innerHTML =
+        steps.join("");
+
+}
+
+
+/* =========================================================
+   DFA TABLE
+========================================================= */
+
+function generateDFATable() {
+
+    let html = "<table>";
+
+    html += "<tr>";
+
+    html += "<th>DFA State</th>";
+
+    dfa.alphabet.forEach(symbol => {
+
+        html += `<th>${symbol}</th>`;
+
+    });
+
+    html += "</tr>";
+
+
+    dfa.states.forEach(state => {
+
+        let label =
+            state === "∅"
+            ? "∅"
+            : `{${state}}`;
+
+        let prefix =
+            state === dfa.start
+            ? "→ "
+            : "";
+
+        let suffix =
+            dfa.finals.includes(state)
+            ? " ★"
+            : "";
+
+        html += "<tr>";
+
+        html += `
+            <td>
+            <b>${prefix}${label}${suffix}</b>
+            </td>
+        `;
+
+
+        dfa.alphabet.forEach(symbol => {
+
+            let next =
+                dfa.transitions[state][symbol];
+
+            html += `
+                <td>
+                ${next === "∅" ? "∅" : `{${next}}`}
+                </td>
+            `;
+
+        });
+
+        html += "</tr>";
+
+    });
+
+
+    html += "</table>";
+
+    document.getElementById("dfaTable").innerHTML =
+        html;
+
+}
+
+
+/* =========================================================
+   DFA DIAGRAM
+========================================================= */
+
+function generateDiagram() {
+
+    const svg =
+        document.getElementById("dfaSvg");
+
+    svg.innerHTML = "";
+
+
+    if (!dfa.states.length) return;
+
+
+    const width = 1000;
+
+    const height = 500;
+
+
+    /*
+       Arrow marker
+    */
+
+    svg.innerHTML += `
+
+        <defs>
+
+            <marker
+                id="arrow"
+                markerWidth="10"
+                markerHeight="10"
+                refX="8"
+                refY="3"
+                orient="auto">
+
+                <path
+                    d="M0,0 L0,6 L9,3 z"
+                    fill="#374151">
+                </path>
+
+            </marker>
+
+        </defs>
+
+    `;
+
+
+    let states = dfa.states;
+
+    let positions = {};
+
+
+    let spacing =
+        width / (states.length + 1);
+
+
+    states.forEach((state, index) => {
+
+        positions[state] = {
+
+            x: spacing * (index + 1),
+
+            y: 250
+
+        };
+
+    });
+
+
+    /*
+       Draw transitions first
+    */
+
+    states.forEach(from => {
+
+        dfa.alphabet.forEach(symbol => {
+
+            let to =
+                dfa.transitions[from][symbol];
+
+            if (!to || !positions[to]) return;
+
+
+            let p1 = positions[from];
+
+            let p2 = positions[to];
+
+
+            /*
+               Self loop
+            */
+
+            if (from === to) {
+
+                svg.innerHTML += `
+
+                    <path
+                        d="
+                        M ${p1.x - 30} ${p1.y - 35}
+                        C ${p1.x - 80} ${p1.y - 110},
+                          ${p1.x + 80} ${p1.y - 110},
+                          ${p1.x + 30} ${p1.y - 35}
+                        "
+                        class="edge"
+                        marker-end="url(#arrow)">
+                    </path>
+
+                    <text
+                        x="${p1.x}"
+                        y="${p1.y - 105}"
+                        text-anchor="middle"
+                        class="edge-label">
+
+                        ${symbol}
+
+                    </text>
+
+                `;
+
+            }
+
+            else {
+
+                let dx = p2.x - p1.x;
+
+                let direction =
+                    dx > 0 ? 1 : -1;
+
+
+                let startX =
+                    p1.x + direction * 50;
+
+                let endX =
+                    p2.x - direction * 50;
+
+
+                let midY =
+                    p1.y - 50;
+
+
+                svg.innerHTML += `
+
+                    <path
+                        d="
+                        M ${startX} ${p1.y}
+                        Q ${(startX + endX) / 2}
+                          ${midY}
+                          ${endX} ${p2.y}
+                        "
+                        class="edge"
+                        marker-end="url(#arrow)">
+                    </path>
+
+                    <text
+                        x="${(startX + endX) / 2}"
+                        y="${midY - 8}"
+                        text-anchor="middle"
+                        class="edge-label">
+
+                        ${symbol}
+
+                    </text>
+
+                `;
+
+            }
+
+        });
+
+    });
+
+
+    /*
+       Draw states
+    */
+
+    states.forEach(state => {
+
+        let p = positions[state];
+
+        let isFinal =
+            dfa.finals.includes(state);
+
+
+        let group =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "g"
+            );
+
+
+        group.setAttribute(
+            "id",
+            "svgState-" + encodeURIComponent(state)
+        );
+
+
+        let circle =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "circle"
+            );
+
+
+        circle.setAttribute(
+            "cx",
+            p.x
+        );
+
+        circle.setAttribute(
+            "cy",
+            p.y
+        );
+
+        circle.setAttribute(
+            "r",
+            48
+        );
+
+        circle.setAttribute(
+            "class",
+            "state-circle" +
+            (isFinal ? " final" : "")
+        );
+
+
+        group.appendChild(circle);
+
+
+        if (isFinal) {
+
+            let inner =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "circle"
+                );
+
+            inner.setAttribute(
+                "cx",
+                p.x
+            );
+
+            inner.setAttribute(
+                "cy",
+                p.y
+            );
+
+            inner.setAttribute(
+                "r",
+                39
+            );
+
+            inner.setAttribute(
+                "fill",
+                "none"
+            );
+
+            inner.setAttribute(
+                "stroke",
+                "#1f2937"
+            );
+
+            inner.setAttribute(
+                "stroke-width",
+                "2"
+            );
+
+            group.appendChild(inner);
+
+        }
+
+
+        let text =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "text"
+            );
+
+
+        text.setAttribute(
+            "x",
+            p.x
+        );
+
+        text.setAttribute(
+            "y",
+            p.y
+        );
+
+        text.setAttribute(
+            "class",
+            "state-label"
+        );
+
+
+        text.textContent =
+            state === "∅"
+            ? "∅"
+            : "{" + state + "}";
+
+
+        group.appendChild(text);
+
+
+        svg.appendChild(group);
+
+    });
+
+
+    /*
+       Start arrow
+    */
+
+    let startPosition =
+        positions[dfa.start];
+
+
+    if (startPosition) {
+
+        svg.innerHTML += `
+
+            <line
+                x1="${startPosition.x - 110}"
+                y1="${startPosition.y}"
+                x2="${startPosition.x - 50}"
+                y2="${startPosition.y}"
+                stroke="#374151"
+                stroke-width="2"
+                marker-end="url(#arrow)">
+            </line>
+
+            <text
+                x="${startPosition.x - 115}"
+                y="${startPosition.y - 15}"
+                text-anchor="middle"
+                font-size="14">
+
+                START
+
+            </text>
+
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   RESET DIAGRAM
+========================================================= */
+
+function resetDiagram() {
+
+    document.getElementById("dfaSvg").innerHTML = `
+
+        <text
+            x="500"
+            y="250"
+            text-anchor="middle"
+            font-size="20">
+
+            DFA diagram will appear here
+
+        </text>
+
+    `;
+
+}
+
+
+/* =========================================================
+   SIMULATION START
+========================================================= */
+
+function startSimulation() {
+
+    if (!dfa.states.length) {
+
+        alert("Generate the DFA first.");
+
+        return;
+
+    }
+
+
+    let input =
+        document
+        .getElementById("simulationInput")
+        .value
+        .trim();
+
+
+    /*
+       Validate alphabet
+    */
+
+    for (let symbol of input) {
+
+        if (!dfa.alphabet.includes(symbol)) {
+
+            document.getElementById(
+                "simulationResult"
+            ).innerHTML = `
+
+                <div class="result error">
+
+                Invalid symbol:
+                <b>${symbol}</b>
+
+                </div>
+
+            `;
+
+            return;
+
+        }
+
+    }
+
+
+    simulation = {
+
+        input,
+
+        position: 0,
+
+        current: dfa.start,
+
+        running: true
+
+    };
+
+
+    document.getElementById(
+        "simulationSteps"
+    ).innerHTML = `
+
+        <div class="simulation-step current">
+
+        <b>Step 0</b>
+
+        <br>
+
+        Start State:
+
+        <b>
+        {${dfa.start}}
+        </b>
+
+        </div>
+
+    `;
+
+
+    document.getElementById(
+        "simulationResult"
+    ).innerHTML = "";
+
+
+    highlightDFAState(dfa.start);
+
+}
+
+
+/* =========================================================
+   NEXT SIMULATION STEP
+========================================================= */
+
+function nextSimulationStep() {
+
+    if (!simulation.running) {
+
+        alert("Click Start Simulation first.");
+
+        return;
+
+    }
+
+
+    if (
+        simulation.position >=
+        simulation.input.length
+    ) {
+
+        finishSimulation();
+
+        return;
+
+    }
+
+
+    let symbol =
+        simulation.input[
+            simulation.position
+        ];
+
+
+    let current =
+        simulation.current;
+
+
+    let next =
+        dfa.transitions[current][symbol];
+
+
+    simulation.position++;
+
+
+    if (!next) {
+
+        simulation.running = false;
+
+        document.getElementById(
+            "simulationResult"
+        ).innerHTML = `
+
+            <div class="result rejected">
+
+            REJECTED ✗
+
+            <br>
+
+            No transition available.
+
+            </div>
+
+        `;
+
+        return;
+
+    }
+
+
+    simulation.current = next;
+
+
+    let step =
+        document.createElement("div");
+
+    step.className =
+        "simulation-step";
+
+
+    step.innerHTML = `
+
+        <b>
+        Step ${simulation.position}
+        </b>
+
+        <br><br>
+
+        Current State:
+        <b>{${current}}</b>
+
+        <br>
+
+        Input Symbol:
+        <b>${symbol}</b>
+
+        <br>
+
+        Transition:
+
+        <b>
+        {${current}}
+        -- ${symbol} -->
+        {${next}}
+        </b>
+
+    `;
+
+
+    document.getElementById(
+        "simulationSteps"
+    ).appendChild(step);
+
+
+    highlightDFAState(next);
+
+
+    if (
+        simulation.position >=
+        simulation.input.length
+    ) {
+
+        finishSimulation();
+
+    }
+
+}
+
+
+/* =========================================================
+   FINISH SIMULATION
+========================================================= */
+
+function finishSimulation() {
+
+    simulation.running = false;
+
+
+    let current =
+        simulation.current;
+
+
+    let accepted =
+        dfa.finals.includes(current);
+
+
+    if (accepted) {
+
+        document.getElementById(
+            "simulationResult"
+        ).innerHTML = `
+
+            <div class="result accepted">
+
+            ACCEPTED ✓
+
+            <br>
+
+            Final DFA State:
+
+            {${current}}
+
+            </div>
+
+        `;
+
+    }
+
+    else {
+
+        document.getElementById(
+            "simulationResult"
+        ).innerHTML = `
+
+            <div class="result rejected">
+
+            REJECTED ✗
+
+            <br>
+
+            Final DFA State:
+
+            {${current}}
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   RESET SIMULATION
+========================================================= */
+
+function resetSimulation() {
+
+    simulation = {
+
+        input: "",
+
+        position: 0,
+
+        current: "",
+
+        running: false
+
+    };
+
+
+    document.getElementById(
+        "simulationSteps"
+    ).innerHTML = "";
+
+
+    document.getElementById(
+        "simulationResult"
+    ).innerHTML = "";
+
+
+    clearDFAHighlight();
+
+}
+
+
+/* =========================================================
+   HIGHLIGHT DFA STATE
+========================================================= */
+
+function highlightDFAState(state) {
+
+    clearDFAHighlight();
+
+
+    let element =
+        document.getElementById(
+            "svgState-" +
+            encodeURIComponent(state)
+        );
+
+
+    if (element) {
+
+        let circle =
+            element.querySelector("circle");
+
+        if (circle) {
+
+            circle.classList.add("active");
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   CLEAR HIGHLIGHT
+========================================================= */
+
+function clearDFAHighlight() {
+
+    document
+        .querySelectorAll(".state-circle")
+        .forEach(circle => {
+
+            circle.classList.remove("active");
+
+        });
+
+}
+
+
+/* =========================================================
+   ENTER KEY
+========================================================= */
+
+document
+.getElementById("simulationInput")
+.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (event.key === "Enter") {
+
+            startSimulation();
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   INITIAL EXAMPLE
+========================================================= */
+
+loadExample();
+
+</script>
+
+</body>
+</html>
