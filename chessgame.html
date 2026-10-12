@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Alpha-Beta Pruning Search Visualizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+    /* Chessboard grid styling */
+    .board-square {
+      aspect-ratio: 1 / 1;
+      position: relative;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease;
+    }
+    .sq-light { background-color: #e2e8f0; color: #1e293b; }
+    .sq-dark { background-color: #64748b; color: #f8fafc; }
+    .sq-selected { background-color: #facc15 !important; }
+    .sq-last-move { background-color: rgba(99, 102, 241, 0.45) !important; }
+    .sq-in-check { background-color: rgba(239, 68, 68, 0.7) !important; }
+    .sq-highlight::after {
+      content: '';
+      position: absolute;
+      width: 32%;
+      height: 32%;
+      border-radius: 50%;
+      background-color: rgba(16, 185, 129, 0.65);
+      pointer-events: none;
+    }
+    .sq-capture::after {
+      content: '';
+      position: absolute;
+      width: 80%;
+      height: 80%;
+      border-radius: 50%;
+      border: 4px solid rgba(239, 68, 68, 0.65);
+      pointer-events: none;
+    }
+
+    /* SVG piece rendering */
+    .chess-piece {
+      width: 86%;
+      height: 86%;
+      cursor: grab;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+      transition: transform 0.12s ease;
+    }
+    .chess-piece:active { cursor: grabbing; transform: scale(1.12); }
+
+    /* Search node styles */
+    .tree-node {
+      transition: all 0.2s ease;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <!-- Header Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur sticky top-0 z-40 px-4 py-2.5">
+    <div class="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-amber-500 via-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 22H5v-2h14v2M17.5 9c-.2 0-.4-.1-.5-.2l-2-2-1.5 3.5 1.5 2.7H9l1.5-2.7L9 6.8l-2 2c-.1.1-.3.2-.5.2-.6 0-1-.4-1-1 0-.3.1-.5.3-.7l3-3c.4-.4 1-.4 1.4 0l1.8 1.8 1.8-1.8c.4-.4 1-.4 1.4 0l3 3c.2.2.3.4.3.7 0 .6-.4 1-1 1M18 19H6v-4h12v4Z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white flex items-center gap-2">
+            Alpha-Beta Chess Search Lab
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Minimax with &alpha;&beta; Cutoffs</span>
+          </h1>
+          <p class="text-xs text-slate-400">Examine how branch pruning, evaluation heuristics, and move ordering curb game-tree explosions</p>
+        </div>
+      </div>
+
+      <!-- Live Search Metrics Strip -->
+      <div class="flex flex-wrap items-center gap-2 font-mono-code text-xs">
+        <div class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5">
+          <span class="text-slate-400">NODES VISITED:</span>
+          <span id="stat-nodes" class="text-amber-400 font-bold ml-1">0</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5">
+          <span class="text-slate-400">&alpha;&beta; CUTOFFS:</span>
+          <span id="stat-cutoffs" class="text-rose-400 font-bold ml-1">0</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5">
+          <span class="text-slate-400">PRUNING SAVED:</span>
+          <span id="stat-pruned-pct" class="text-emerald-400 font-bold ml-1">0.0%</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5">
+          <span class="text-slate-400">TIME:</span>
+          <span id="stat-time" class="text-cyan-400 font-bold ml-1">0 ms</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout Grid -->
+  <main class="flex-1 max-w-[1700px] w-full mx-auto p-4 grid grid-cols-1 xl:grid-cols-12 gap-5">
+
+    <!-- LEFT COLUMN: Chessboard & Match Controls -->
+    <section class="xl:col-span-5 flex flex-col gap-4">
+      
+      <!-- Board Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-2xl relative">
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800 text-xs">
+          <!-- Turn Indicator -->
+          <div class="flex items-center gap-2">
+            <span id="turn-dot" class="w-3 h-3 rounded-full bg-slate-100 shadow"></span>
+            <span id="turn-text" class="font-semibold text-slate-200">White to Move</span>
+            <span id="game-status-tag" class="hidden ml-1 px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">Check</span>
+          </div>
+
+          <!-- Material / Eval Balance -->
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 font-mono">Eval:</span>
+            <span id="eval-score-badge" class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-200">+0.00</span>
+          </div>
+        </div>
+
+        <!-- Captured Pieces Row (Black's captures from White) -->
+        <div class="flex items-center justify-between min-h-[24px] px-1 mb-2">
+          <div id="black-captured" class="flex flex-wrap gap-1 text-base leading-none text-slate-300"></div>
+          <span id="material-diff-black" class="text-xs font-mono text-slate-400 font-semibold"></span>
+        </div>
+
+        <!-- The Chess Board & Evaluation Bar Container -->
+        <div class="flex gap-2.5 items-stretch">
+          <!-- Static Evaluation Bar -->
+          <div class="w-2.5 bg-slate-800 rounded-full overflow-hidden flex flex-col justify-end border border-slate-700/60 relative group" title="Static Position Evaluation">
+            <div id="eval-bar-white" class="w-full bg-white transition-all duration-300" style="height: 50%;"></div>
+          </div>
+
+          <!-- Interactive Board -->
+          <div class="flex-1 relative aspect-square max-w-[560px] mx-auto rounded-xl overflow-hidden shadow-inner border-2 border-slate-700/80">
+            <div id="chessboard" class="grid grid-cols-8 grid-rows-8 w-full h-full"></div>
+            <!-- Move Arrow Overlay Canvas -->
+            <canvas id="boardArrowCanvas" class="absolute inset-0 pointer-events-none w-full h-full"></canvas>
+          </div>
+        </div>
+
+        <!-- Captured Pieces Row (White's captures from Black) -->
+        <div class="flex items-center justify-between min-h-[24px] px-1 mt-2">
+          <div id="white-captured" class="flex flex-wrap gap-1 text-base leading-none text-slate-300"></div>
+          <span id="material-diff-white" class="text-xs font-mono text-slate-400 font-semibold"></span>
+        </div>
+
+        <!-- Board Toolbar -->
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5">
+            <button id="btn-new-game" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-medium text-white transition flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Reset
+            </button>
+            <button id="btn-flip-board" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+              Flip
+            </button>
+            <button id="btn-undo-move" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+              Undo
+            </button>
+            <button id="btn-ai-play-now" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium transition flex items-center gap-1">
+              <span>AI Move</span>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <label class="text-slate-400">AI Side:</label>
+            <select id="select-ai-mode" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 outline-none font-mono">
+              <option value="black" selected>AI is Black</option>
+              <option value="white">AI is White</option>
+              <option value="both">AI vs AI</option>
+              <option value="none">Human vs Human</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Presets & Move History Accordion -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <!-- Preset Tactical FEN Positions -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
+          <div class="font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            Tactical Scenarios
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <button class="preset-btn px-2.5 py-1.5 rounded bg-slate-800/80 hover:bg-indigo-600/30 text-left border border-slate-700/60 transition" data-preset="start">
+              1. Standard Starting Setup
+            </button>
+            <button class="preset-btn px-2.5 py-1.5 rounded bg-slate-800/80 hover:bg-indigo-600/30 text-left border border-slate-700/60 transition" data-preset="scholars">
+              2. Defend Scholar's Mate Threat
+            </button>
+            <button class="preset-btn px-2.5 py-1.5 rounded bg-slate-800/80 hover:bg-indigo-600/30 text-left border border-slate-700/60 transition" data-preset="backrank">
+              3. Back-Rank Rook Checkmate
+            </button>
+            <button class="preset-btn px-2.5 py-1.5 rounded bg-slate-800/80 hover:bg-indigo-600/30 text-left border border-slate-700/60 transition" data-preset="fork">
+              4. Knight Fork Tactics
+            </button>
+          </div>
+        </div>
+
+        <!-- Move History PGN-like Log -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col">
+          <div class="font-semibold text-slate-300 mb-2 flex items-center justify-between">
+            <span>Move History</span>
+            <span id="move-count-lbl" class="font-mono text-[10px] text-slate-400">0 plies</span>
+          </div>
+          <div id="move-history-list" class="flex-1 max-h-[140px] overflow-y-auto space-y-1 font-mono text-[11px] text-slate-300 pr-1">
+            <div class="text-slate-500 italic py-2 text-center">No moves played yet</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Search Visualizer, Tree & Algorithmic Controls -->
+    <section class="xl:col-span-7 flex flex-col gap-4">
+
+      <!-- Alpha-Beta Configuration Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>Alpha-Beta Engine Parameters</span>
+              <span class="text-indigo-400 font-mono text-xs">v(&alpha;, &beta;)</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Toggle move ordering heuristics and control search depth</p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Step By Step Mode Toggle -->
+            <label class="flex items-center gap-2 cursor-pointer text-xs">
+              <span class="text-slate-300">Animated Step Search:</span>
+              <input type="checkbox" id="chk-step-mode" class="sr-only peer">
+              <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3">
+          <!-- Depth Slider -->
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">Search Depth (Plies)</span>
+              <span id="lbl-depth-val" class="font-mono text-indigo-400 font-bold">3 Plies</span>
+            </div>
+            <input id="input-depth" type="range" min="1" max="4" value="3" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+            <div class="flex justify-between text-[10px] text-slate-500 font-mono mt-1">
+              <span>1 (Instant)</span>
+              <span>2</span>
+              <span>3 (Default)</span>
+              <span>4 (Deep)</span>
+            </div>
+          </div>
+
+          <!-- Move Ordering Strategy -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Move Ordering Heuristic</label>
+            <select id="select-move-ordering" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-mono outline-none">
+              <option value="mvv_lva" selected>MVV-LVA (Captures & Attacks 1st)</option>
+              <option value="unordered">Random / None (Raw Minimax)</option>
+            </select>
+            <p class="text-[10px] text-slate-400 mt-1">Testing unordered reveals the massive cutoffs gained by MVV-LVA.</p>
+          </div>
+
+          <!-- Step Mode Actions -->
+          <div class="flex flex-col justify-end">
+            <div class="flex items-center gap-2">
+              <button id="btn-step-search" disabled class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 transition disabled:opacity-50">
+                Next Step ▶
+              </button>
+              <button id="btn-finish-search" disabled class="py-2 px-3 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 transition disabled:opacity-50">
+                Finish ⏩
+              </button>
+            </div>
+            <span id="step-status-indicator" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Standard Instant Search Active</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Search Decision Tree Inspector -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 flex flex-col min-h-[460px]">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            <h3 class="text-xs font-bold text-slate-200">Interactive Alpha-Beta Search Tree</h3>
+          </div>
+
+          <!-- Legend -->
+          <div class="flex items-center gap-3 text-[11px] font-mono">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-indigo-500"></span>MAX Node</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-emerald-500"></span>MIN Node</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-rose-500"></span>&alpha;&ge;&beta; Cutoff</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded ring-2 ring-amber-400 bg-amber-500/20"></span>Active Node</span>
+          </div>
+        </div>
+
+        <!-- Visual Tree Canvas & SVG Container -->
+        <div id="tree-container" class="relative flex-1 w-full bg-slate-950 rounded-xl border border-slate-800/80 overflow-auto p-4 flex flex-col justify-start">
+          <div id="tree-graph-wrapper" class="relative min-w-full min-h-[360px]">
+            <!-- Tree content dynamically populated by JS -->
+            <div id="tree-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-slate-500">
+              <svg class="w-12 h-12 text-slate-700 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+              <p class="text-sm font-medium text-slate-400">Search Tree Idle</p>
+              <p class="text-xs text-slate-600 mt-1">Make a move or click "AI Move" to observe how the tree branches expand, update &alpha;/&beta;, and trigger pruning cutoffs.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alpha-Beta Math Logic Card -->
+        <div class="mt-3 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs">
+          <div class="flex items-center justify-between font-mono-code text-[11px] text-slate-300">
+            <div>
+              <span class="text-indigo-400 font-bold">&alpha; (Alpha):</span> Lower bound guaranteed to Max player (<span id="math-alpha-val">-&infin;</span>)
+            </div>
+            <div>
+              <span class="text-emerald-400 font-bold">&beta; (Beta):</span> Upper bound guaranteed to Min player (<span id="math-beta-val">+&infin;</span>)
+            </div>
+          </div>
+          <p id="math-explanation-text" class="text-slate-400 text-[11px] mt-1.5 leading-relaxed">
+            Whenever a child score proves <span class="text-rose-400 font-mono font-semibold">&alpha; &ge; &beta;</span>, the parent node halts search immediately because the opponent has already guaranteed a better refutation elsewhere.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Promotion Dialog Modal -->
+  <div id="promotion-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-xs w-full shadow-2xl text-center">
+      <h3 class="text-sm font-bold text-white mb-3">Pawn Promotion</h3>
+      <p class="text-xs text-slate-400 mb-4">Select the piece to promote your pawn into:</p>
+      <div id="promo-choices" class="grid grid-cols-4 gap-2"></div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT ENGINE & VISUALIZER SCRIPT -->
+  <script>
+    // --- 1. CHESS CONSTANTS & PIECE-SQUARE TABLES (PST) ---
+    const WHITE = 'w';
+    const BLACK = 'b';
+
+    // Standard piece values (centipawns)
+    const PIECE_VALUES = {
+      p: 100,
+      n: 320,
+      b: 330,
+      r: 500,
+      q: 900,
+      k: 20000
+    };
+
+    // Simplified Piece-Square Tables (White perspective, rank 8 to rank 1)
+    const PST = {
+      p: [
+         0,  0,  0,  0,  0,  0,  0,  0,
+        50, 50, 50, 50, 50, 50, 50, 50,
+        10, 10, 20, 30, 30, 20, 10, 10,
+         5,  5, 10, 25, 25, 10,  5,  5,
+         0,  0,  0, 20, 20,  0,  0,  0,
+         5, -5,-10,  0,  0,-10, -5,  5,
+         5, 10, 10,-20,-20, 10, 10,  5,
+         0,  0,  0,  0,  0,  0,  0,  0
+      ],
+      n: [
+        -50,-40,-30,-30,-30,-30,-40,-50,
+        -40,-20,  0,  0,  0,  0,-20,-40,
+        -30,  0, 10, 15, 15, 10,  0,-30,
+        -30,  5, 15, 20, 20, 15,  5,-30,
+        -30,  0, 15, 20, 20, 15,  0,-30,
+        -30,  5, 10, 15, 15, 10,  5,-30,
+        -40,-20,  0,  5,  5,  0,-20,-40,
+        -50,-40,-30,-30,-30,-30,-40,-50
+      ],
+      b: [
+        -20,-10,-10,-10,-10,-10,-10,-20,
+        -10,  0,  0,  0,  0,  0,  0,-10,
+        -10,  0,  5, 10, 10,  5,  0,-10,
+        -10,  5,  5, 10, 10,  5,  5,-10,
+        -10,  0, 10, 10, 10, 10,  0,-10,
+        -10, 10, 10, 10, 10, 10, 10,-10,
+        -10,  5,  0,  0,  0,  0,  5,-10,
+        -20,-10,-10,-10,-10,-10,-10,-20
+      ],
+      r: [
+          0,  0,  0,  0,  0,  0,  0,  0,
+          5, 10, 10, 10, 10, 10, 10,  5,
+         -5,  0,  0,  0,  0,  0,  0, -5,
+         -5,  0,  0,  0,  0,  0,  0, -5,
+         -5,  0,  0,  0,  0,  0,  0, -5,
+         -5,  0,  0,  0,  0,  0,  0, -5,
+         -5,  0,  0,  0,  0,  0,  0, -5,
+          0,  0,  0,  5,  5,  0,  0,  0
+      ],
+      q: [
+        -20,-10,-10, -5, -5,-10,-10,-20,
+        -10,  0,  0,  0,  0,  0,  0,-10,
+        -10,  0,  5,  5,  5,  5,  0,-10,
+         -5,  0,  5,  5,  5,  5,  0, -5,
+          0,  0,  5,  5,  5,  5,  0, -5,
+        -10,  5,  5,  5,  5,  5,  0,-10,
+        -10,  0,  5,  0,  0,  0,  0,-10,
+        -20,-10,-10, -5, -5,-10,-10,-20
+      ],
+      k: [
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -20,-30,-30,-40,-40,-30,-30,-20,
+        -10,-20,-20,-20,-20,-20,-20,-10,
+         20, 20,  0,  0,  0,  0, 20, 20,
+         20, 30, 10,  0,  0, 10, 30, 20
+      ]
+    };
+
+    // SVG Chess piece vector drawings
+    const PIECE_SVGS = {
+      wp: `<svg viewBox="0 0 45 45" class="chess-piece"><path d="m22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+      wn: `<svg viewBox="0 0 45 45" class="chess-piece"><path d="m22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" fill="#fff" stroke="#000" stroke-width="1.5"/><path d="M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3" fill="#fff" stroke="#000" stroke-width="1.5"/><circle cx="9.5" cy="25.5" r="1.5" fill="#000"/></svg>`,
+      wb: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="none" fill-rule="evenodd" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="#fff"><path d="m9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/><path d="m15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/><path d="m25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z"/></g><path d="m17.5 26h10M15 30h15M22.5 15.5v5M20 18h5"/></g></svg>`,
+      wr: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5" stroke-linejoin="miter"/><path d="M34 14l-3 3H14l-3-3"/><path d="M31 17v12.5H14V17"/><path d="M31 29.5l1.5 2.5h-20l1.5-2.5"/></g></svg>`,
+      wq: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0z"/><path d="m9 26c8.5-1.5 21-1.5 27 0l2-12-7 11-6-16-6 16-7-11 2 12zm0 0c0 4 7 8 13.5 8s13.5-4 13.5-8M9 39h27v-3H9v3z"/></g></svg>`,
+      wk: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22.5 11.63V6M20 8h5" stroke-linejoin="miter"/><path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="#fff"/><path d="M11.5 37c5.5 3.5 16.5 3.5 22 0v-4c-5.5 3.5-16.5 3.5-22 0v4z" fill="#fff"/><path d="M11.5 33c5.5-3 16.5-3 22 0 0-4.5-4-9-5.5-12.5-.5-1-1-2.5-2.5-2.5h-6c-1.5 0-2 1.5-2.5 2.5-1.5 3.5-5.5 8-5.5 12.5z" fill="#fff"/></g></svg>`,
+      
+      bp: `<svg viewBox="0 0 45 45" class="chess-piece"><path d="m22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z" fill="#1e293b" stroke="#000" stroke-width="1.5" stroke-linecap="round"/><path d="M22.5 10c-1.6 0-3 1.4-3 3s1.4 3 3 3 3-1.4 3-3-1.4-3-3-3z" fill="#64748b" opacity="0.4"/></svg>`,
+      bn: `<svg viewBox="0 0 45 45" class="chess-piece"><path d="m22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" fill="#1e293b" stroke="#000" stroke-width="1.5"/><path d="M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3" fill="#1e293b" stroke="#000" stroke-width="1.5"/><circle cx="9.5" cy="25.5" r="1.5" fill="#f8fafc"/></svg>`,
+      bb: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="none" fill-rule="evenodd" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="#1e293b"><path d="m9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/><path d="m15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/><path d="m25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z"/></g><path d="m17.5 26h10M15 30h15M22.5 15.5v5M20 18h5" stroke="#94a3b8"/></g></svg>`,
+      br: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="#1e293b" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5" stroke-linejoin="miter"/><path d="M34 14l-3 3H14l-3-3"/><path d="M31 17v12.5H14V17"/><path d="M31 29.5l1.5 2.5h-20l1.5-2.5"/></g></svg>`,
+      bq: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="#1e293b" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0z"/><path d="m9 26c8.5-1.5 21-1.5 27 0l2-12-7 11-6-16-6 16-7-11 2 12zm0 0c0 4 7 8 13.5 8s13.5-4 13.5-8M9 39h27v-3H9v3z"/></g></svg>`,
+      bk: `<svg viewBox="0 0 45 45" class="chess-piece"><g fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22.5 11.63V6M20 8h5" stroke-linejoin="miter"/><path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="#1e293b"/><path d="M11.5 37c5.5 3.5 16.5 3.5 22 0v-4c-5.5 3.5-16.5 3.5-22 0v4z" fill="#1e293b"/><path d="M11.5 33c5.5-3 16.5-3 22 0 0-4.5-4-9-5.5-12.5-.5-1-1-2.5-2.5-2.5h-6c-1.5 0-2 1.5-2.5 2.5-1.5 3.5-5.5 8-5.5 12.5z" fill="#1e293b"/></g></svg>`
+    };
+
+    // --- 2. FAST ROBUST CHESS STATE & MOVE GENERATOR ---
+    class ChessGame {
+      constructor() {
+        this.board = new Array(64).fill(null);
+        this.turn = WHITE;
+        this.castling = { K: true, Q: true, k: true, q: true };
+        this.epSquare = -1; // En-passant target square index
+        this.halfmoveClock = 0;
+        this.fullmoveNumber = 1;
+        this.capturedWhite = [];
+        this.capturedBlack = [];
+        this.history = [];
+        this.loadFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      }
+
+      loadFen(fen) {
+        this.board.fill(null);
+        const parts = fen.split(' ');
+        const rows = parts[0].split('/');
+
+        for (let r = 0; r < 8; r++) {
+          let c = 0;
+          for (let ch of rows[r]) {
+            if (ch >= '1' && ch <= '8') {
+              c += parseInt(ch, 10);
+            } else {
+              const color = (ch === ch.toUpperCase()) ? WHITE : BLACK;
+              const type = ch.toLowerCase();
+              this.board[r * 8 + c] = { type, color };
+              c++;
+            }
+          }
+        }
+
+        this.turn = parts[1] || WHITE;
+        this.castling = {
+          K: (parts[2] || '').includes('K'),
+          Q: (parts[2] || '').includes('Q'),
+          k: (parts[2] || '').includes('k'),
+          q: (parts[2] || '').includes('q')
+        };
+
+        if (parts[3] && parts[3] !== '-') {
+          const col = parts[3].charCodeAt(0) - 97;
+          const row = 8 - parseInt(parts[3][1], 10);
+          this.epSquare = row * 8 + col;
+        } else {
+          this.epSquare = -1;
+        }
+
+        this.halfmoveClock = parseInt(parts[4] || '0', 10);
+        this.fullmoveNumber = parseInt(parts[5] || '1', 10);
+        this.capturedWhite = [];
+        this.capturedBlack = [];
+        this.history = [];
+      }
+
+      // Convert board coordinate to notation (e.g., 52 -> "e2")
+      static sqToCoord(sq) {
+        const col = String.fromCharCode(97 + (sq % 8));
+        const row = 8 - Math.floor(sq / 8);
+        return `${col}${row}`;
+      }
+
+      clone() {
+        const clone = new ChessGame();
+        for (let i = 0; i < 64; i++) {
+          clone.board[i] = this.board[i] ? { ...this.board[i] } : null;
+        }
+        clone.turn = this.turn;
+        clone.castling = { ...this.castling };
+        clone.epSquare = this.epSquare;
+        clone.halfmoveClock = this.halfmoveClock;
+        clone.fullmoveNumber = this.fullmoveNumber;
+        clone.capturedWhite = [...this.capturedWhite];
+        clone.capturedBlack = [...this.capturedBlack];
+        return clone;
+      }
+
+      getMoves(color = this.turn) {
+        const moves = [];
+        const oppColor = color === WHITE ? BLACK : WHITE;
+
+        for (let sq = 0; sq < 64; sq++) {
+          const piece = this.board[sq];
+          if (!piece || piece.color !== color) continue;
+
+          const r = Math.floor(sq / 8);
+          const c = sq % 8;
+
+          switch (piece.type) {
+            case 'p': {
+              const dir = color === WHITE ? -1 : 1;
+              const startRank = color === WHITE ? 6 : 1;
+              const promoRank = color === WHITE ? 0 : 7;
+
+              // Forward 1
+              const forwardSq = (r + dir) * 8 + c;
+              if (r + dir >= 0 && r + dir < 8 && !this.board[forwardSq]) {
+                if (r + dir === promoRank) {
+                  ['q', 'r', 'b', 'n'].forEach(promo => {
+                    moves.push({ from: sq, to: forwardSq, promo });
+                  });
+                } else {
+                  moves.push({ from: sq, to: forwardSq });
+                  // Forward 2 from start
+                  const forward2Sq = (r + dir * 2) * 8 + c;
+                  if (r === startRank && !this.board[forward2Sq]) {
+                    moves.push({ from: sq, to: forward2Sq });
+                  }
+                }
+              }
+
+              // Captures
+              [-1, 1].forEach(dc => {
+                const targetC = c + dc;
+                const targetR = r + dir;
+                if (targetC >= 0 && targetC < 8 && targetR >= 0 && targetR < 8) {
+                  const targetSq = targetR * 8 + targetC;
+                  const targetPiece = this.board[targetSq];
+                  if (targetPiece && targetPiece.color === oppColor) {
+                    if (targetR === promoRank) {
+                      ['q', 'r', 'b', 'n'].forEach(promo => {
+                        moves.push({ from: sq, to: targetSq, promo, captured: targetPiece.type });
+                      });
+                    } else {
+                      moves.push({ from: sq, to: targetSq, captured: targetPiece.type });
+                    }
+                  } else if (targetSq === this.epSquare) {
+                    moves.push({ from: sq, to: targetSq, isEp: true, captured: 'p' });
+                  }
+                }
+              });
+              break;
+            }
+
+            case 'n': {
+              const jumps = [
+                [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+                [ 1, -2], [ 1, 2], [ 2, -1], [ 2, 1]
+              ];
+              jumps.forEach(([dr, dc]) => {
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                  const tSq = nr * 8 + nc;
+                  const tPiece = this.board[tSq];
+                  if (!tPiece) moves.push({ from: sq, to: tSq });
+                  else if (tPiece.color === oppColor) moves.push({ from: sq, to: tSq, captured: tPiece.type });
+                }
+              });
+              break;
+            }
+
+            case 'b':
+            case 'r':
+            case 'q': {
+              const rays = [];
+              if (piece.type === 'b' || piece.type === 'q') rays.push([-1,-1], [-1,1], [1,-1], [1,1]);
+              if (piece.type === 'r' || piece.type === 'q') rays.push([-1,0], [1,0], [0,-1], [0,1]);
+
+              rays.forEach(([dr, dc]) => {
+                let step = 1;
+                while (true) {
+                  const nr = r + dr * step;
+                  const nc = c + dc * step;
+                  if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) break;
+                  const tSq = nr * 8 + nc;
+                  const tPiece = this.board[tSq];
+                  if (!tPiece) {
+                    moves.push({ from: sq, to: tSq });
+                  } else {
+                    if (tPiece.color === oppColor) {
+                      moves.push({ from: sq, to: tSq, captured: tPiece.type });
+                    }
+                    break;
+                  }
+                  step++;
+                }
+              });
+              break;
+            }
+
+            case 'k': {
+              const kSteps = [
+                [-1,-1], [-1,0], [-1,1],
+                [ 0,-1],         [ 0,1],
+                [ 1,-1], [ 1,0], [ 1,1]
+              ];
+              kSteps.forEach(([dr, dc]) => {
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                  const tSq = nr * 8 + nc;
+                  const tPiece = this.board[tSq];
+                  if (!tPiece) moves.push({ from: sq, to: tSq });
+                  else if (tPiece.color === oppColor) moves.push({ from: sq, to: tSq, captured: tPiece.type });
+                }
+              });
+
+              // Castling moves (if not in check)
+              if (color === WHITE && sq === 60) {
+                if (this.castling.K && !this.board[61] && !this.board[62] && !this.isSquareAttacked(60, BLACK) && !this.isSquareAttacked(61, BLACK) && !this.isSquareAttacked(62, BLACK)) {
+                  moves.push({ from: 60, to: 62, isCastling: true });
+                }
+                if (this.castling.Q && !this.board[59] && !this.board[58] && !this.board[57] && !this.isSquareAttacked(60, BLACK) && !this.isSquareAttacked(59, BLACK) && !this.isSquareAttacked(58, BLACK)) {
+                  moves.push({ from: 60, to: 58, isCastling: true });
+                }
+              } else if (color === BLACK && sq === 4) {
+                if (this.castling.k && !this.board[5] && !this.board[6] && !this.isSquareAttacked(4, WHITE) && !this.isSquareAttacked(5, WHITE) && !this.isSquareAttacked(6, WHITE)) {
+                  moves.push({ from: 4, to: 6, isCastling: true });
+                }
+                if (this.castling.q && !this.board[3] && !this.board[2] && !this.board[1] && !this.isSquareAttacked(4, WHITE) && !this.isSquareAttacked(3, WHITE) && !this.isSquareAttacked(2, WHITE)) {
+                  moves.push({ from: 4, to: 2, isCastling: true });
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // Filter out pseudo-legal moves that leave King in check
+        return moves.filter(mv => {
+          const snapshot = this.makeMove(mv);
+          const kingSq = this.findKing(color);
+          const inCheck = kingSq !== -1 && this.isSquareAttacked(kingSq, oppColor);
+          this.unmakeMove(mv, snapshot);
+          return !inCheck;
+        });
+      }
+
+      findKing(color) {
+        for (let i = 0; i < 64; i++) {
+          if (this.board[i] && this.board[i].type === 'k' && this.board[i].color === color) {
+            return i;
+          }
+        }
+        return -1;
+      }
+
+      isSquareAttacked(sq, byColor) {
+        const r = Math.floor(sq / 8);
+        const c = sq % 8;
+
+        // Pawns
+        const pawnDir = byColor === WHITE ? 1 : -1; // reverse: looking from sq to attacking pawn
+        const pawnR = r + pawnDir;
+        if (pawnR >= 0 && pawnR < 8) {
+          if (c - 1 >= 0) {
+            const p = this.board[pawnR * 8 + c - 1];
+            if (p && p.color === byColor && p.type === 'p') return true;
+          }
+          if (c + 1 < 8) {
+            const p = this.board[pawnR * 8 + c + 1];
+            if (p && p.color === byColor && p.type === 'p') return true;
+          }
+        }
+
+        // Knights
+        const jumps = [
+          [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+          [ 1, -2], [ 1, 2], [ 2, -1], [ 2, 1]
+        ];
+        for (let [dr, dc] of jumps) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+            const p = this.board[nr * 8 + nc];
+            if (p && p.color === byColor && p.type === 'n') return true;
+          }
+        }
+
+        // Rooks and Queens
+        const straight = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (let [dr, dc] of straight) {
+          let s = 1;
+          while (true) {
+            const nr = r + dr * s, nc = c + dc * s;
+            if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) break;
+            const p = this.board[nr * 8 + nc];
+            if (p) {
+              if (p.color === byColor && (p.type === 'r' || p.type === 'q')) return true;
+              break;
+            }
+            s++;
+          }
+        }
+
+        // Bishops and Queens
+        const diag = [[-1,-1],[-1,1],[1,-1],[1,1]];
+        for (let [dr, dc] of diag) {
+          let s = 1;
+          while (true) {
+            const nr = r + dr * s, nc = c + dc * s;
+            if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) break;
+            const p = this.board[nr * 8 + nc];
+            if (p) {
+              if (p.color === byColor && (p.type === 'b' || p.type === 'q')) return true;
+              break;
+            }
+            s++;
+          }
+        }
+
+        // King
+        const kSteps = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for (let [dr, dc] of kSteps) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+            const p = this.board[nr * 8 + nc];
+            if (p && p.color === byColor && p.type === 'k') return true;
+          }
+        }
+
+        return false;
+      }
+
+      makeMove(mv) {
+        const snapshot = {
+          piece: this.board[mv.from],
+          destPiece: this.board[mv.to],
+          castling: { ...this.castling },
+          epSquare: this.epSquare,
+          halfmoveClock: this.halfmoveClock,
+          captured: null
+        };
+
+        const piece = this.board[mv.from];
+        this.board[mv.from] = null;
+
+        // Normal capture
+        if (snapshot.destPiece) {
+          snapshot.captured = snapshot.destPiece;
+          if (this.turn === WHITE) this.capturedWhite.push(snapshot.destPiece.type);
+          else this.capturedBlack.push(snapshot.destPiece.type);
+        }
+
+        // En passant capture handling
+        if (mv.isEp) {
+          const epPawnSq = mv.to + (this.turn === WHITE ? 8 : -8);
+          snapshot.epCaptured = this.board[epPawnSq];
+          this.board[epPawnSq] = null;
+          snapshot.captured = snapshot.epCaptured;
+          if (this.turn === WHITE) this.capturedWhite.push('p');
+          else this.capturedBlack.push('p');
+        }
+
+        // Promotion handling
+        if (mv.promo) {
+          this.board[mv.to] = { type: mv.promo, color: piece.color };
+        } else {
+          this.board[mv.to] = piece;
+        }
+
+        // Castling rook movement
+        if (mv.isCastling) {
+          if (mv.to === 62) { // W 0-0
+            this.board[61] = this.board[63];
+            this.board[63] = null;
+          } else if (mv.to === 58) { // W 0-0-0
+            this.board[59] = this.board[56];
+            this.board[56] = null;
+          } else if (mv.to === 6) { // B 0-0
+            this.board[5] = this.board[7];
+            this.board[7] = null;
+          } else if (mv.to === 2) { // B 0-0-0
+            this.board[3] = this.board[0];
+            this.board[0] = null;
+          }
+        }
+
+        // En-passant square updates
+        if (piece.type === 'p' && Math.abs(mv.to - mv.from) === 16) {
+          this.epSquare = (mv.from + mv.to) / 2;
+        } else {
+          this.epSquare = -1;
+        }
+
+        // Revoke castling rights if King or Rooks move
+        if (piece.type === 'k') {
+          if (piece.color === WHITE) { this.castling.K = false; this.castling.Q = false; }
+          else { this.castling.k = false; this.castling.q = false; }
+        }
+        if (mv.from === 56 || mv.to === 56) this.castling.Q = false;
+        if (mv.from === 63 || mv.to === 63) this.castling.K = false;
+        if (mv.from === 0 || mv.to === 0) this.castling.q = false;
+        if (mv.from === 7 || mv.to === 7) this.castling.k = false;
+
+        this.turn = this.turn === WHITE ? BLACK : WHITE;
+        return snapshot;
+      }
+
+      unmakeMove(mv, snapshot) {
+        this.turn = this.turn === WHITE ? BLACK : WHITE;
+        this.castling = snapshot.castling;
+        this.epSquare = snapshot.epSquare;
+        this.halfmoveClock = snapshot.halfmoveClock;
+
+        this.board[mv.from] = snapshot.piece;
+        this.board[mv.to] = snapshot.destPiece;
+
+        // Revert en passant
+        if (mv.isEp) {
+          const epPawnSq = mv.to + (this.turn === WHITE ? 8 : -8);
+          this.board[epPawnSq] = snapshot.epCaptured;
+          if (this.turn === WHITE) this.capturedWhite.pop();
+          else this.capturedBlack.pop();
+        } else if (snapshot.destPiece) {
+          if (this.turn === WHITE) this.capturedWhite.pop();
+          else this.capturedBlack.pop();
+        }
+
+        // Revert castling rooks
+        if (mv.isCastling) {
+          if (mv.to === 62) {
+            this.board[63] = this.board[61];
+            this.board[61] = null;
+          } else if (mv.to === 58) {
+            this.board[56] = this.board[59];
+            this.board[59] = null;
+          } else if (mv.to === 6) {
+            this.board[7] = this.board[5];
+            this.board[5] = null;
+          } else if (mv.to === 2) {
+            this.board[0] = this.board[3];
+            this.board[3] = null;
+          }
+        }
+      }
+
+      evaluatePosition() {
+        let score = 0;
+        for (let i = 0; i < 64; i++) {
+          const p = this.board[i];
+          if (!p) continue;
+
+          let val = PIECE_VALUES[p.type];
+          let pstVal = 0;
+          if (p.color === WHITE) {
+            pstVal = PST[p.type][i];
+            score += (val + pstVal);
+          } else {
+            // Flip board square for Black PST lookup
+            const flippedSq = (7 - Math.floor(i / 8)) * 8 + (i % 8);
+            pstVal = PST[p.type][flippedSq];
+            score -= (val + pstVal);
+          }
+        }
+        return score;
+      }
+
+      isGameOver() {
+        const moves = this.getMoves(this.turn);
+        if (moves.length === 0) {
+          const kingSq = this.findKing(this.turn);
+          const opp = this.turn === WHITE ? BLACK : WHITE;
+          const inCheck = kingSq !== -1 && this.isSquareAttacked(kingSq, opp);
+          return { over: true, checkmate: inCheck, stalemate: !inCheck };
+        }
+        return { over: false };
+      }
+    }
+
+    // --- 3. ALPHA-BETA ENGINE & TREE VISUALIZATION TRACER ---
+    class AlphaBetaEngine {
+      constructor() {
+        this.nodesEvaluated = 0;
+        this.cutoffsCount = 0;
+        this.searchTree = null;
+        this.searchHistory = [];
+        this.stepQueue = [];
+        this.currentStepIndex = 0;
+      }
+
+      // MVV-LVA move ordering heuristic (Most Valuable Victim - Least Valuable Attacker)
+      orderMoves(game, moves) {
+        return moves.map(mv => {
+          let score = 0;
+          if (mv.captured) {
+            const victimVal = PIECE_VALUES[mv.captured] || 100;
+            const attacker = game.board[mv.from];
+            const attackerVal = attacker ? (PIECE_VALUES[attacker.type] || 100) : 100;
+            score = 1000 + (victimVal * 10 - attackerVal);
+          }
+          if (mv.promo) score += 900;
+          if (mv.isCastling) score += 60;
+          return { mv, score };
+        }).sort((a, b) => b.score - a.score).map(x => x.mv);
+      }
+
+      search(game, maxDepth, useOrdering = true) {
+        this.nodesEvaluated = 0;
+        this.cutoffsCount = 0;
+        this.stepQueue = [];
+
+        const isMaximizing = game.turn === WHITE;
+        const initialAlpha = -Infinity;
+        const initialBeta = Infinity;
+
+        const rootNode = {
+          id: 'root',
+          name: 'ROOT',
+          depth: 0,
+          isMax: isMaximizing,
+          alpha: initialAlpha,
+          beta: initialBeta,
+          value: null,
+          cutoff: false,
+          children: [],
+          bestMove: null
+        };
+        this.searchTree = rootNode;
+
+        const startTime = performance.now();
+        const bestEval = this.alphaBeta(game, maxDepth, initialAlpha, initialBeta, isMaximizing, rootNode, useOrdering);
+        const searchTime = performance.now() - startTime;
+
+        return {
+          bestMove: rootNode.bestMove,
+          eval: bestEval,
+          nodes: this.nodesEvaluated,
+          cutoffs: this.cutoffsCount,
+          time: searchTime,
+          tree: rootNode,
+          steps: this.stepQueue
+        };
+      }
+
+      alphaBeta(game, depth, alpha, beta, isMaximizing, treeNode, useOrdering) {
+        this.nodesEvaluated++;
+        treeNode.alpha = alpha;
+        treeNode.beta = beta;
+
+        const status = game.isGameOver();
+        if (depth === 0 || status.over) {
+          let staticVal = game.evaluatePosition();
+          if (status.checkmate) {
+            staticVal = isMaximizing ? -99999 : 99999;
+          }
+          treeNode.value = staticVal;
+          this.stepQueue.push({
+            type: 'leaf',
+            nodeId: treeNode.id,
+            val: staticVal,
+            alpha, beta,
+            msg: `Leaf evaluated: ${staticVal}`
+          });
+          return staticVal;
+        }
+
+        let legalMoves = game.getMoves(game.turn);
+        if (useOrdering) {
+          legalMoves = this.orderMoves(game, legalMoves);
+        }
+
+        let bestScore = isMaximizing ? -Infinity : Infinity;
+        let chosenMove = null;
+
+        for (let i = 0; i < legalMoves.length; i++) {
+          const move = legalMoves[i];
+          const moveName = `${ChessGame.sqToCoord(move.from)}-${ChessGame.sqToCoord(move.to)}${move.promo ? move.promo.toUpperCase() : ''}`;
+
+          const childNode = {
+            id: `${treeNode.id}_${i}`,
+            name: moveName,
+            move: move,
+            depth: treeNode.depth + 1,
+            isMax: !isMaximizing,
+            alpha: alpha,
+            beta: beta,
+            value: null,
+            cutoff: false,
+            children: []
+          };
+          treeNode.children.push(childNode);
+
+          this.stepQueue.push({
+            type: 'expand',
+            nodeId: childNode.id,
+            parentId: treeNode.id,
+            moveName,
+            alpha, beta,
+            msg: `Exploring branch ${moveName} at ply ${childNode.depth}`
+          });
+
+          const snap = game.makeMove(move);
+          const childScore = this.alphaBeta(game, depth - 1, alpha, beta, !isMaximizing, childNode, useOrdering);
+          game.unmakeMove(move, snap);
+
+          if (isMaximizing) {
+            if (childScore > bestScore) {
+              bestScore = childScore;
+              chosenMove = move;
+            }
+            alpha = Math.max(alpha, bestScore);
+            treeNode.alpha = alpha;
+
+            if (alpha >= beta) {
+              this.cutoffsCount++;
+              treeNode.cutoff = true;
+              childNode.cutoffTrigger = true;
+              this.stepQueue.push({
+                type: 'cutoff',
+                nodeId: treeNode.id,
+                prunedAt: childNode.id,
+                alpha, beta,
+                msg: `BETA CUTOFF: α (${alpha}) ≥ β (${beta}). Pruning remaining ${legalMoves.length - 1 - i} siblings!`
+              });
+              break; // Beta cut-off
+            }
+          } else {
+            if (childScore < bestScore) {
+              bestScore = childScore;
+              chosenMove = move;
+            }
+            beta = Math.min(beta, bestScore);
+            treeNode.beta = beta;
+
+            if (alpha >= beta) {
+              this.cutoffsCount++;
+              treeNode.cutoff = true;
+              childNode.cutoffTrigger = true;
+              this.stepQueue.push({
+                type: 'cutoff',
+                nodeId: treeNode.id,
+                prunedAt: childNode.id,
+                alpha, beta,
+                msg: `ALPHA CUTOFF: α (${alpha}) ≥ β (${beta}). Pruning remaining ${legalMoves.length - 1 - i} siblings!`
+              });
+              break; // Alpha cut-off
+            }
+          }
+        }
+
+        treeNode.value = bestScore;
+        treeNode.bestMove = chosenMove;
+        return bestScore;
+      }
+    }
+
+    // --- 4. CONTROLLER & UI APPLICATION STATE ---
+    const game = new ChessGame();
+    const engine = new AlphaBetaEngine();
+
+    let selectedSquare = null;
+    let legalMovesForSelected = [];
+    let boardFlipped = false;
+    let pendingPromoMove = null;
+    let lastMove = null;
+    let stepSearchMode = false;
+    let activeStepResult = null;
+    let stepIndex = 0;
+
+    // Tactical presets
+    const PRESETS = {
+      start: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      scholars: 'r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 5', // Scholar threat
+      backrank: '6k1/5ppp/8/8/8/8/4rPPP/3R2K1 w - - 0 1', // Rd8# in 1
+      fork: 'r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5'
+    };
+
+    // DOM Elements
+    const boardEl = document.getElementById('chessboard');
+    const turnDot = document.getElementById('turn-dot');
+    const turnText = document.getElementById('turn-text');
+    const gameStatusTag = document.getElementById('game-status-tag');
+    const evalScoreBadge = document.getElementById('eval-score-badge');
+    const evalBarWhite = document.getElementById('eval-bar-white');
+    const whiteCapturedEl = document.getElementById('white-captured');
+    const blackCapturedEl = document.getElementById('black-captured');
+    const moveHistoryList = document.getElementById('move-history-list');
+    const moveCountLbl = document.getElementById('move-count-lbl');
+
+    const statNodes = document.getElementById('stat-nodes');
+    const statCutoffs = document.getElementById('stat-cutoffs');
+    const statPrunedPct = document.getElementById('stat-pruned-pct');
+    const statTime = document.getElementById('stat-time');
+
+    const inputDepth = document.getElementById('input-depth');
+    const lblDepthVal = document.getElementById('lbl-depth-val');
+    const selectOrdering = document.getElementById('select-move-ordering');
+    const chkStepMode = document.getElementById('chk-step-mode');
+    const btnStepSearch = document.getElementById('btn-step-search');
+    const btnFinishSearch = document.getElementById('btn-finish-search');
+    const stepStatusIndicator = document.getElementById('step-status-indicator');
+
+    const treeContainer = document.getElementById('tree-container');
+    const treeGraphWrapper = document.getElementById('tree-graph-wrapper');
+    const mathAlphaVal = document.getElementById('math-alpha-val');
+    const mathBetaVal = document.getElementById('math-beta-val');
+    const mathExplanation = document.getElementById('math-explanation-text');
+
+    const promoModal = document.getElementById('promotion-modal');
+    const promoChoices = document.getElementById('promo-choices');
+    const selectAiMode = document.getElementById('select-ai-mode');
+
+    function renderBoard() {
+      boardEl.innerHTML = '';
+      const inCheckSq = game.isSquareAttacked(game.findKing(game.turn), game.turn === WHITE ? BLACK : WHITE) ? game.findKing(game.turn) : -1;
+
+      for (let rankIdx = 0; rankIdx < 8; rankIdx++) {
+        for (let colIdx = 0; colIdx < 8; colIdx++) {
+          const r = boardFlipped ? 7 - rankIdx : rankIdx;
+          const c = boardFlipped ? 7 - colIdx : colIdx;
+          const sq = r * 8 + c;
+          const isLight = (r + c) % 2 === 0;
+
+          const sqDiv = document.createElement('div');
+          sqDiv.className = `board-square ${isLight ? 'sq-light' : 'sq-dark'}`;
+          sqDiv.dataset.sq = sq;
+
+          // Selection and Last Move Highlight
+          if (sq === selectedSquare) sqDiv.classList.add('sq-selected');
+          if (lastMove && (sq === lastMove.from || sq === lastMove.to)) sqDiv.classList.add('sq-last-move');
+          if (sq === inCheckSq) sqDiv.classList.add('sq-in-check');
+
+          // Highlight valid destinations
+          const legalDest = legalMovesForSelected.find(m => m.to === sq);
+          if (legalDest) {
+            if (legalDest.captured || legalDest.isEp) sqDiv.classList.add('sq-capture');
+            else sqDiv.classList.add('sq-highlight');
+          }
+
+          // Render Piece SVG
+          const piece = game.board[sq];
+          if (piece) {
+            const pieceKey = `${piece.color}${piece.type}`;
+            sqDiv.innerHTML = PIECE_SVGS[pieceKey] || '';
+          }
+
+          // Click handler for human moves
+          sqDiv.addEventListener('click', () => handleSquareClick(sq));
+          boardEl.appendChild(sqDiv);
+        }
+      }
+
+      updateStatusAndEval();
+    }
+
+    function handleSquareClick(sq) {
+      const aiMode = selectAiMode.value;
+      if (aiMode === 'both') return;
+      if (aiMode === 'black' && game.turn === BLACK) return;
+      if (aiMode === 'white' && game.turn === WHITE) return;
+
+      const piece = game.board[sq];
+
+      // If a piece of current turn is clicked, select it
+      if (piece && piece.color === game.turn) {
+        selectedSquare = sq;
+        legalMovesForSelected = game.getMoves().filter(m => m.from === sq);
+        renderBoard();
+        return;
+      }
+
+      // If a valid move destination is clicked
+      if (selectedSquare !== null) {
+        const move = legalMovesForSelected.find(m => m.to === sq);
+        if (move) {
+          if (move.promo) {
+            pendingPromoMove = move;
+            showPromotionModal(game.turn);
+            return;
+          }
+          executeMove(move);
+        } else {
+          selectedSquare = null;
+          legalMovesForSelected = [];
+          renderBoard();
+        }
+      }
+    }
+
+    function executeMove(move) {
+      const snap = game.makeMove(move);
+      lastMove = move;
+      selectedSquare = null;
+      legalMovesForSelected = [];
+      game.history.push({ move, snap });
+
+      renderBoard();
+      recordMoveHistory(move);
+
+      // Check if AI should respond
+      checkTriggerAI();
+    }
+
+    function showPromotionModal(color) {
+      promoChoices.innerHTML = '';
+      const pieces = ['q', 'r', 'b', 'n'];
+      pieces.forEach(type => {
+        const btn = document.createElement('button');
+        btn.className = 'p-2 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center border border-slate-700';
+        btn.innerHTML = PIECE_SVGS[`${color}${type}`];
+        btn.onclick = () => {
+          promoModal.classList.add('hidden');
+          if (pendingPromoMove) {
+            pendingPromoMove.promo = type;
+            executeMove(pendingPromoMove);
+            pendingPromoMove = null;
+          }
+        };
+        promoChoices.appendChild(btn);
+      });
+      promoModal.classList.remove('hidden');
+    }
+
+    function recordMoveHistory(move) {
+      const from = ChessGame.sqToCoord(move.from);
+      const to = ChessGame.sqToCoord(move.to);
+      const notation = `${from} &rarr; ${to}${move.promo ? '=' + move.promo.toUpperCase() : ''}`;
+
+      if (game.history.length === 1) {
+        moveHistoryList.innerHTML = '';
+      }
+
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between py-0.5 border-b border-slate-800/40';
+      row.innerHTML = `
+        <span class="text-slate-400">#${game.history.length}</span>
+        <span class="font-bold ${game.turn === BLACK ? 'text-white' : 'text-slate-300'}">${notation}</span>
+        <span class="text-[10px] text-slate-500">${move.captured ? 'x' + move.captured.toUpperCase() : 'quiet'}</span>
+      `;
+      moveHistoryList.appendChild(row);
+      moveHistoryList.scrollTop = moveHistoryList.scrollHeight;
+      moveCountLbl.textContent = `${game.history.length} plies`;
+    }
+
+    function updateStatusAndEval() {
+      // Turn label
+      if (game.turn === WHITE) {
+        turnDot.className = 'w-3 h-3 rounded-full bg-slate-100 shadow';
+        turnText.textContent = 'White to Move';
+      } else {
+        turnDot.className = 'w-3 h-3 rounded-full bg-slate-900 border border-slate-600 shadow';
+        turnText.textContent = 'Black to Move';
+      }
+
+      // Checkmate or Stalemate status
+      const status = game.isGameOver();
+      if (status.over) {
+        gameStatusTag.classList.remove('hidden');
+        if (status.checkmate) {
+          gameStatusTag.textContent = `Checkmate! ${game.turn === WHITE ? 'Black' : 'White'} Wins`;
+          gameStatusTag.className = 'ml-1 px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30';
+        } else {
+          gameStatusTag.textContent = 'Stalemate (Draw)';
+          gameStatusTag.className = 'ml-1 px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        }
+      } else {
+        const inCheck = game.isSquareAttacked(game.findKing(game.turn), game.turn === WHITE ? BLACK : WHITE);
+        if (inCheck) {
+          gameStatusTag.classList.remove('hidden');
+          gameStatusTag.textContent = 'Check!';
+          gameStatusTag.className = 'ml-1 px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30';
+        } else {
+          gameStatusTag.classList.add('hidden');
+        }
+      }
+
+      // Captured pieces icons
+      const pieceGlyphs = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' };
+      whiteCapturedEl.innerHTML = game.capturedWhite.map(p => `<span>${pieceGlyphs[p] || ''}</span>`).join('');
+      blackCapturedEl.innerHTML = game.capturedBlack.map(p => `<span>${pieceGlyphs[p] || ''}</span>`).join('');
+
+      // Static Evaluation Bar calculation
+      const evalScore = game.evaluatePosition();
+      const cpScore = (evalScore / 100).toFixed(2);
+      evalScoreBadge.textContent = (evalScore >= 0 ? '+' : '') + cpScore;
+
+      // Map [-1000, 1000] centipawns to percentage [5%, 95%]
+      let whitePercent = 50 + (evalScore / 1200) * 50;
+      whitePercent = Math.max(5, Math.min(95, whitePercent));
+      evalBarWhite.style.height = `${whitePercent}%`;
+    }
+
+    function checkTriggerAI() {
+      const mode = selectAiMode.value;
+      const status = game.isGameOver();
+      if (status.over) return;
+
+      const aiTurn = (mode === 'both') || (mode === 'black' && game.turn === BLACK) || (mode === 'white' && game.turn === WHITE);
+      if (aiTurn) {
+        setTimeout(runAiSearch, 120);
+      }
+    }
+
+    function runAiSearch() {
+      const depth = parseInt(inputDepth.value, 10);
+      const useOrdering = selectOrdering.value === 'mvv_lva';
+
+      if (chkStepMode.checked) {
+        // Prepare animated stepping
+        activeStepResult = engine.search(game, depth, useOrdering);
+        stepIndex = 0;
+        btnStepSearch.disabled = false;
+        btnFinishSearch.disabled = false;
+        stepStatusIndicator.textContent = `Ready: 0 of ${activeStepResult.steps.length} search steps`;
+        renderTreeGraph(activeStepResult.tree, null);
+      } else {
+        const res = engine.search(game, depth, useOrdering);
+        updateSearchStats(res);
+        renderTreeGraph(res.tree, null);
+
+        if (res.bestMove) {
+          executeMove(res.bestMove);
+        }
+      }
+    }
+
+    function updateSearchStats(res) {
+      statNodes.textContent = res.nodes.toLocaleString();
+      statCutoffs.textContent = res.cutoffs.toLocaleString();
+      statTime.textContent = `${res.time.toFixed(1)} ms`;
+
+      // Theoretical full Minimax nodes (branching b ~ 30)
+      const depth = parseInt(inputDepth.value, 10);
+      const theoreticalMinimax = Math.pow(25, depth);
+      const savedPct = Math.max(0, Math.min(99.9, ((1 - res.nodes / theoreticalMinimax) * 100))).toFixed(1);
+      statPrunedPct.textContent = `${savedPct}%`;
+
+      mathAlphaVal.textContent = res.tree.alpha === -Infinity ? '-∞' : res.tree.alpha;
+      mathBetaVal.textContent = res.tree.beta === Infinity ? '+∞' : res.tree.beta;
+    }
+
+    function renderTreeGraph(rootNode, activeNodeId = null) {
+      if (!rootNode) return;
+      treeGraphWrapper.innerHTML = '';
+
+      const container = document.createElement('div');
+      container.className = 'w-full flex flex-col items-center gap-6 py-2';
+
+      // We render depths 0, 1 and top of 2 to maintain crisp visual legibility
+      const depthLevels = [[rootNode], rootNode.children || [], []];
+      if (rootNode.children) {
+        rootNode.children.forEach(c => {
+          if (c.children && c.children.length > 0) {
+            depthLevels[2].push(...c.children.slice(0, 3)); // show first 3 for clarity
+          }
+        });
+      }
+
+      depthLevels.forEach((levelNodes, dIdx) => {
+        if (levelNodes.length === 0) return;
+
+        const row = document.createElement('div');
+        row.className = 'flex flex-wrap items-center justify-center gap-3 w-full';
+
+        const label = document.createElement('div');
+        label.className = 'w-full text-center text-[10px] font-mono text-slate-500 mb-1';
+        label.textContent = `Ply Depth ${dIdx} — ${dIdx % 2 === 0 ? 'MAX (Maximize Eval)' : 'MIN (Minimize Eval)'}`;
+        row.appendChild(label);
+
+        levelNodes.forEach(node => {
+          const card = document.createElement('div');
+          const isMax = node.isMax;
+          const isCutoff = node.cutoff || node.cutoffTrigger;
+          const isActive = node.id === activeNodeId;
+
+          let borderClass = isMax ? 'border-indigo-500/60' : 'border-emerald-500/60';
+          let bgClass = isMax ? 'bg-indigo-950/40' : 'bg-emerald-950/40';
+
+          if (isCutoff) {
+            borderClass = 'border-rose-500';
+            bgClass = 'bg-rose-950/40';
+          }
+          if (isActive) {
+            borderClass = 'border-amber-400 ring-2 ring-amber-400/80';
+          }
+
+          card.className = `p-2.5 rounded-xl border ${borderClass} ${bgClass} font-mono text-xs shadow-lg min-w-[130px] max-w-[180px] flex flex-col gap-1 transition-all`;
+
+          const nodeValText = node.value !== null ? node.value : '...';
+          const alphaText = node.alpha === -Infinity ? '-∞' : node.alpha;
+          const betaText = node.beta === Infinity ? '+∞' : node.beta;
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between text-[11px] font-bold">
+              <span class="${isMax ? 'text-indigo-300' : 'text-emerald-300'}">${node.name}</span>
+              <span class="text-[9px] px-1 rounded ${isCutoff ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-400'}">
+                ${isCutoff ? 'CUTOFF' : (isMax ? 'MAX' : 'MIN')}
+              </span>
+            </div>
+            <div class="text-[10px] text-slate-300 flex justify-between">
+              <span>Score:</span> <span class="font-bold text-amber-300">${nodeValText}</span>
+            </div>
+            <div class="text-[9px] text-slate-400 flex justify-between border-t border-slate-800/80 pt-1">
+              <span>&alpha;: ${alphaText}</span>
+              <span>&beta;: ${betaText}</span>
+            </div>
+          `;
+          row.appendChild(card);
+        });
+
+        container.appendChild(row);
+      });
+
+      treeGraphWrapper.appendChild(container);
+    }
+
+    // Step Search Controls
+    btnStepSearch.addEventListener('click', () => {
+      if (!activeStepResult || stepIndex >= activeStepResult.steps.length) return;
+      const step = activeStepResult.steps[stepIndex];
+      stepIndex++;
+
+      stepStatusIndicator.textContent = `Step ${stepIndex}/${activeStepResult.steps.length}: ${step.msg}`;
+      mathAlphaVal.textContent = step.alpha === -Infinity ? '-∞' : step.alpha;
+      mathBetaVal.textContent = step.beta === Infinity ? '+∞' : step.beta;
+
+      renderTreeGraph(activeStepResult.tree, step.nodeId);
+
+      if (stepIndex >= activeStepResult.steps.length) {
+        btnStepSearch.disabled = true;
+        btnFinishSearch.disabled = true;
+        updateSearchStats(activeStepResult);
+        if (activeStepResult.bestMove) executeMove(activeStepResult.bestMove);
+      }
+    });
+
+    btnFinishSearch.addEventListener('click', () => {
+      if (!activeStepResult) return;
+      btnStepSearch.disabled = true;
+      btnFinishSearch.disabled = true;
+      updateSearchStats(activeStepResult);
+      renderTreeGraph(activeStepResult.tree, null);
+      if (activeStepResult.bestMove) executeMove(activeStepResult.bestMove);
+    });
+
+    // --- 5. EVENT LISTENERS & INITIALIZATION ---
+    document.getElementById('btn-new-game').addEventListener('click', () => {
+      game.loadFen(PRESETS.start);
+      lastMove = null;
+      selectedSquare = null;
+      legalMovesForSelected = [];
+      renderBoard();
+      moveHistoryList.innerHTML = '<div class="text-slate-500 italic py-2 text-center">No moves played yet</div>';
+      moveCountLbl.textContent = '0 plies';
+      treeGraphWrapper.innerHTML = `
+        <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-slate-500">
+          <p class="text-sm font-medium text-slate-400">Board Reset</p>
+          <p class="text-xs text-slate-600 mt-1">Make a move to run the Alpha-Beta evaluation.</p>
+        </div>
+      `;
+    });
+
+    document.getElementById('btn-flip-board').addEventListener('click', () => {
+      boardFlipped = !boardFlipped;
+      renderBoard();
+    });
+
+    document.getElementById('btn-undo-move').addEventListener('click', () => {
+      if (game.history.length === 0) return;
+      const last = game.history.pop();
+      game.unmakeMove(last.move, last.snap);
+      lastMove = game.history.length > 0 ? game.history[game.history.length - 1].move : null;
+      selectedSquare = null;
+      legalMovesForSelected = [];
+      renderBoard();
+    });
+
+    document.getElementById('btn-ai-play-now').addEventListener('click', () => {
+      runAiSearch();
+    });
+
+    inputDepth.addEventListener('input', e => {
+      lblDepthVal.textContent = `${e.target.value} Plies`;
+    });
+
+    chkStepMode.addEventListener('change', e => {
+      stepSearchMode = e.target.checked;
+      btnStepSearch.disabled = !stepSearchMode;
+      btnFinishSearch.disabled = !stepSearchMode;
+      stepStatusIndicator.textContent = stepSearchMode ? 'Step-by-step Search Armed' : 'Instant Search Active';
+    });
+
+    // Preset Buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fenKey = btn.dataset.preset;
+        if (PRESETS[fenKey]) {
+          game.loadFen(PRESETS[fenKey]);
+          lastMove = null;
+          selectedSquare = null;
+          legalMovesForSelected = [];
+          renderBoard();
+          moveHistoryList.innerHTML = `<div class="text-indigo-400 italic py-1 text-center font-mono">Loaded Preset: ${fenKey.toUpperCase()}</div>`;
+          // Automatically run search to highlight the tactical refutation
+          setTimeout(runAiSearch, 150);
+        }
+      });
+    });
+
+    // Window initialize
+    window.onload = function() {
+      renderBoard();
+    };
+  </script>
+</body>
+</html>
