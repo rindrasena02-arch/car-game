@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Easy Drive — High Speed Edition</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: #0d1117;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 15px;
+    }
+
+    .header {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .title h1 {
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .title p {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+
+    .btn-action {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      padding: 6px 14px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .stats {
+      width: 100%;
+      max-width: 380px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .stat-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 6px 2px;
+      text-align: center;
+    }
+
+    .stat-box span {
+      display: block;
+      font-size: 0.55rem;
+      color: #8b949e;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-box strong {
+      font-size: 0.9rem;
+      color: #58a6ff;
+    }
+
+    .game-container {
+      position: relative;
+      width: 320px;
+      height: 440px;
+      background: #161b22;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid #30363d;
+    }
+
+    canvas {
+      display: block;
+      background-color: #21262d;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(13, 17, 23, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .overlay-icon {
+      font-size: 2.2rem;
+      margin-bottom: 5px;
+    }
+
+    .overlay h2 {
+      font-size: 1.4rem;
+      margin-bottom: 6px;
+    }
+
+    .overlay p {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-bottom: 15px;
+      line-height: 1.3;
+    }
+
+    .level-select-box {
+      margin-bottom: 15px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .level-select-box label {
+      font-size: 0.8rem;
+      color: #8b949e;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .level-select-box select {
+      background: #21262d;
+      color: #ffffff;
+      border: 1px solid #30363d;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      outline: none;
+      cursor: pointer;
+      width: 90%;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-start {
+      background: #238636;
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .btn-shop {
+      background: #1f6feb;
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .garage-panel {
+      width: 100%;
+      text-align: left;
+      margin-bottom: 12px;
+    }
+
+    .garage-section {
+      margin-bottom: 10px;
+    }
+
+    .garage-section label {
+      font-size: 0.75rem;
+      color: #8b949e;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .color-options {
+      display: flex;
+      gap: 8px;
+    }
+
+    .color-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+
+    .color-btn.selected {
+      border-color: #ffffff;
+      transform: scale(1.1);
+    }
+
+    .upgrade-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #161b22;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+    }
+
+    .controls-upgrade {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-mod {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #ffffff;
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-mod:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .controls {
+      width: 100%;
+      max-width: 320px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .btn-control {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #ffffff;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .btn-control:active {
+      background: #30363d;
+    }
+
+    .instructions {
+      margin-top: 8px;
+      font-size: 0.7rem;
+      color: #8b949e;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">
+      <h1>🚘 Easy Drive</h1>
+      <p>60 km/h Start Speed</p>
+    </div>
+    <button class="btn-action" id="pauseBtn">Pause</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat-box">
+      <span>LEVEL</span>
+      <strong id="lvlVal">1</strong>
+    </div>
+    <div class="stat-box">
+      <span>DISTANCE</span>
+      <strong id="distVal">0 m</strong>
+    </div>
+    <div class="stat-box">
+      <span>SPEED</span>
+      <strong id="speedVal">60 km/h</strong>
+    </div>
+    <div class="stat-box">
+      <span>BEST</span>
+      <strong id="bestVal">0 m</strong>
+    </div>
+  </div>
+
+  <div class="game-container">
+    <canvas id="gameCanvas" width="320" height="440"></canvas>
+
+    <div class="overlay" id="startOverlay">
+      <div class="overlay-icon" id="overlayIcon">🚘</div>
+      <h2 id="overlayTitle">Easy Drive</h2>
+      <p id="overlayDesc">Starts at 60 km/h every level and increases gradually!</p>
+
+      <div class="level-select-box" id="levelSelectBox">
+        <label for="levelChooser">Select Level:</label>
+        <select id="levelChooser">
+          <option value="1">Level 1 (Goal: 1000m)</option>
+          <option value="2">Level 2 (Goal: 2000m)</option>
+          <option value="3">Level 3 (Goal: 3000m)</option>
+          <option value="4">Level 4 (Goal: 4000m)</option>
+          <option value="5">Level 5 (Goal: 5000m)</option>
+          <option value="6">Level 6 (Goal: 6000m)</option>
+          <option value="7">Level 7 (Goal: 7000m)</option>
+          <option value="8">Level 8 (Goal: 8000m)</option>
+        </select>
+      </div>
+
+      <div class="btn-group" id="menuBtnGroup">
+        <button class="btn-shop" id="openShopBtn">Garage</button>
+        <button class="btn-start" id="startBtn">Start Drive</button>
+      </div>
+      <button class="btn-start hidden" id="nextLvlBtn">Next Level →</button>
+    </div>
+
+    <div class="overlay hidden" id="garageOverlay">
+      <h2>🛠️ Garage & Mods</h2>
+      <p>Tune stats up or down (Refunds included).</p>
+
+      <div class="garage-panel">
+        <div class="garage-section">
+          <label>Car Color</label>
+          <div class="color-options" id="colorPicker">
+            <div class="color-btn selected" style="background: #3498db" data-color="#3498db"></div>
+            <div class="color-btn" style="background: #2ecc71" data-color="#2ecc71"></div>
+            <div class="color-btn" style="background: #e74c3c" data-color="#e74c3c"></div>
+            <div class="color-btn" style="background: #9b59b6" data-color="#9b59b6"></div>
+            <div class="color-btn" style="background: #f1c40f" data-color="#f1c40f"></div>
+          </div>
+        </div>
+
+        <div class="garage-section">
+          <div class="upgrade-row">
+            <div>
+              <strong>Engine Tune</strong>
+              <div style="font-size: 0.65rem; color: #8b949e;" id="engineLvl">Level 1</div>
+            </div>
+            <div class="controls-upgrade">
+              <button class="btn-mod" id="decEngine">-</button>
+              <button class="btn-mod" id="incEngine" style="color: #2ecc71;">+</button>
+            </div>
+          </div>
+
+          <div class="upgrade-row">
+            <div>
+              <strong>Brake Boost</strong>
+              <div style="font-size: 0.65rem; color: #8b949e;" id="brakeLvl">Level 1</div>
+            </div>
+            <div class="controls-upgrade">
+              <button class="btn-mod" id="decBrake">-</button>
+              <button class="btn-mod" id="incBrake" style="color: #2ecc71;">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-start" id="closeShopBtn">Back to Menu</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-control" id="leftBtn">←</button>
+    <button class="btn-control" id="brakeBtn">BRAKE</button>
+    <button class="btn-control" id="rightBtn">→</button>
+  </div>
+
+  <div class="instructions">
+    Keyboard: ← → to steer · Space to brake · P to pause
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const W = canvas.width;
+    const H = canvas.height;
+
+    let isRunning = false;
+    let isPaused = false;
+    let score = 0;
+    let levelStartScore = 0;
+    let currentLevel = 1;
+    let levelGoalDistance = 1000;
+    let finishLineY = -100;
+    let finishLineSpawned = false;
+
+    let bestScore = parseInt(localStorage.getItem("easy_drive_best")) || 0;
+
+    let carMods = JSON.parse(localStorage.getItem("easy_drive_mods")) || {
+      color: "#3498db",
+      engineLevel: 1,
+      brakeLevel: 1
+    };
+
+    const START_SPEED = 6.0; 
+    let speed = START_SPEED;
+    let baseSpeed = START_SPEED;
+    let roadOffset = 0;
+
+    const lvlVal = document.getElementById("lvlVal");
+    const distVal = document.getElementById("distVal");
+    const speedVal = document.getElementById("speedVal");
+    const bestVal = document.getElementById("bestVal");
+    const startOverlay = document.getElementById("startOverlay");
+    const garageOverlay = document.getElementById("garageOverlay");
+    const startBtn = document.getElementById("startBtn");
+    const nextLvlBtn = document.getElementById("nextLvlBtn");
+    const openShopBtn = document.getElementById("openShopBtn");
+    const closeShopBtn = document.getElementById("closeShopBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayDesc = document.getElementById("overlayDesc");
+    const overlayIcon = document.getElementById("overlayIcon");
+    const menuBtnGroup = document.getElementById("menuBtnGroup");
+    const levelChooser = document.getElementById("levelChooser");
+    const levelSelectBox = document.getElementById("levelSelectBox");
+
+    const incEngine = document.getElementById("incEngine");
+    const decEngine = document.getElementById("decEngine");
+    const incBrake = document.getElementById("incBrake");
+    const decBrake = document.getElementById("decBrake");
+
+    bestVal.textContent = `${Math.floor(bestScore)} m`;
+
+    const car = {
+      x: W / 2 - 15,
+      y: H - 90,
+      w: 30,
+      h: 55,
+      speedX: 5.5
+    };
+
+    let traffic = [];
+    const trafficColors = ["#e74c3c", "#f1c40f", "#2ecc71", "#9b59b6", "#e67e22"];
+
+    const keys = { left: false, right: false, brake: false };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+      if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+      if (e.key === " " || e.key === "ArrowDown") keys.brake = true;
+      if (e.key === "p" || e.key === "P") togglePause();
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+      if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+      if (e.key === " " || e.key === "ArrowDown") keys.brake = false;
+    });
+
+    const setupBtn = (btn, keyName) => {
+      btn.addEventListener("mousedown", () => keys[keyName] = true);
+      btn.addEventListener("mouseup", () => keys[keyName] = false);
+      btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[keyName] = true; });
+      btn.addEventListener("touchend", (e) => { e.preventDefault(); keys[keyName] = false; });
+    };
+
+    setupBtn(document.getElementById("leftBtn"), "left");
+    setupBtn(document.getElementById("rightBtn"), "right");
+    setupBtn(document.getElementById("brakeBtn"), "brake");
+
+    startBtn.addEventListener("click", startGame);
+    nextLvlBtn.addEventListener("click", proceedNextLevel);
+
+    openShopBtn.addEventListener("click", () => {
+      startOverlay.classList.add("hidden");
+      garageOverlay.classList.remove("hidden");
+      updateShopUI();
+    });
+
+    closeShopBtn.addEventListener("click", () => {
+      garageOverlay.classList.add("hidden");
+      startOverlay.classList.remove("hidden");
+    });
+
+    pauseBtn.addEventListener("click", togglePause);
+
+    document.querySelectorAll(".color-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("selected"));
+        e.target.classList.add("selected");
+        carMods.color = e.target.getAttribute("data-color");
+        saveMods();
+        draw();
+      });
+    });
+
+    incEngine.addEventListener("click", () => {
+      const cost = carMods.engineLevel * 500;
+      if (bestScore >= cost) {
+        bestScore -= cost;
+        carMods.engineLevel += 1;
+        saveMods();
+        updateShopUI();
+      }
+    });
+
+    decEngine.addEventListener("click", () => {
+      if (carMods.engineLevel > 1) {
+        carMods.engineLevel -= 1;
+        const refund = carMods.engineLevel * 500;
+        bestScore += refund;
+        saveMods();
+        updateShopUI();
+      }
+    });
+
+    incBrake.addEventListener("click", () => {
+      const cost = carMods.brakeLevel * 300;
+      if (bestScore >= cost) {
+        bestScore -= cost;
+        carMods.brakeLevel += 1;
+        saveMods();
+        updateShopUI();
+      }
+    });
+
+    decBrake.addEventListener("click", () => {
+      if (carMods.brakeLevel > 1) {
+        carMods.brakeLevel -= 1;
+        const refund = carMods.brakeLevel * 300;
+        bestScore += refund;
+        saveMods();
+        updateShopUI();
+      }
+    });
+
+    function saveMods() {
+      localStorage.setItem("easy_drive_mods", JSON.stringify(carMods));
+      localStorage.setItem("easy_drive_best", bestScore);
+      bestVal.textContent = `${Math.floor(bestScore)} m`;
+    }
+
+    function updateShopUI() {
+      document.getElementById("engineLvl").textContent = `Level ${carMods.engineLevel} (+${(carMods.engineLevel - 1) * 10}% Acceleration)`;
+      document.getElementById("brakeLvl").textContent = `Level ${carMods.brakeLevel} (+${(carMods.brakeLevel - 1) * 15}% Brake Power)`;
+
+      const engineCost = carMods.engineLevel * 500;
+      const brakeCost = carMods.brakeLevel * 300;
+
+      incEngine.disabled = bestScore < engineCost;
+      decEngine.disabled = carMods.engineLevel <= 1;
+
+      incBrake.disabled = bestScore < brakeCost;
+      decBrake.disabled = carMods.brakeLevel <= 1;
+    }
+
+    function startGame() {
+      currentLevel = parseInt(levelChooser.value);
+      score = (currentLevel - 1) * 1000; 
+      levelStartScore = score;
+      levelGoalDistance = currentLevel * 1000;
+      finishLineY = -100;
+      finishLineSpawned = false;
+
+      baseSpeed = START_SPEED;
+      speed = baseSpeed;
+      traffic = [];
+      car.x = W / 2 - 15;
+      isRunning = true;
+      isPaused = false;
+
+      levelSelectBox.classList.add("hidden");
+      menuBtnGroup.classList.remove("hidden");
+      nextLvlBtn.classList.add("hidden");
+      startOverlay.classList.add("hidden");
+      pauseBtn.textContent = "Pause";
+      loop();
+    }
+
+    function proceedNextLevel() {
+      currentLevel++;
+      
+      let opt = Array.from(levelChooser.options).find(o => o.value == currentLevel);
+      if (!opt) {
+        opt = document.createElement("option");
+        opt.value = currentLevel;
+        opt.textContent = `Level ${currentLevel} (Goal: ${currentLevel * 1000}m)`;
+        levelChooser.appendChild(opt);
+      }
+      levelChooser.value = currentLevel;
+
+      levelStartScore = score;
+      levelGoalDistance = currentLevel * 1000;
+      finishLineY = -100;
+      finishLineSpawned = false;
+
+      baseSpeed = START_SPEED;
+      traffic = [];
+
+      isRunning = true;
+      isPaused = false;
+      startOverlay.classList.add("hidden");
+      loop();
+    }
+
+    function levelComplete() {
+      isRunning = false;
+
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem("easy_drive_best", bestScore);
+        bestVal.textContent = `${Math.floor(bestScore)} m`;
+      }
+
+      overlayIcon.textContent = "🏁";
+      overlayTitle.textContent = `LEVEL ${currentLevel} COMPLETED!`;
+      overlayDesc.textContent = `Crossed finish line at ${Math.floor(score)}m! Get ready to start at 60 km/h in Level ${currentLevel + 1}.`;
+
+      levelSelectBox.classList.add("hidden");
+      menuBtnGroup.classList.add("hidden");
+      nextLvlBtn.classList.remove("hidden");
+      startOverlay.classList.remove("hidden");
+    }
+
+    function togglePause() {
+      if (!isRunning) return;
+      isPaused = !isPaused;
+      pauseBtn.textContent = isPaused ? "Resume" : "Pause";
+      if (!isPaused) loop();
+    }
+
+    function spawnTraffic() {
+      if (finishLineSpawned) return;
+
+      const currentKm = speed * 10;
+      const spawnChance = 0.018 + (currentLevel * 0.002);
+      if (Math.random() < spawnChance) {
+        const laneW = (W - 40) / 3;
+        const lane = Math.floor(Math.random() * 3);
+        const x = 20 + lane * laneW + (laneW - 30) / 2;
+
+        const minGap = Math.max(40, 150 - (currentKm * 0.5));
+        const tooClose = traffic.some(v => v.y < minGap);
+        if (!tooClose) {
+          traffic.push({
+            x: x,
+            y: -60,
+            w: 30,
+            h: 55,
+            speed: Math.random() * (1.5 + currentLevel * 0.3) + 1.5,
+            color: trafficColors[Math.floor(Math.random() * trafficColors.length)]
+          });
+        }
+      }
+    }
+
+    function isColliding(a, b) {
+      const p = 5;
+      return (
+        a.x + p < b.x + b.w - p &&
+        a.x + a.w - p > b.x + p &&
+        a.y + p < b.y + b.h - p &&
+        a.y + a.h - p > b.y + p
+      );
+    }
+
+    function endGame() {
+      isRunning = false;
+
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem("easy_drive_best", bestScore);
+        bestVal.textContent = `${Math.floor(bestScore)} m`;
+      }
+
+      overlayIcon.textContent = "🚘";
+      overlayTitle.textContent = "Game Over!";
+      overlayDesc.textContent = `Failed at Level ${currentLevel} · Distance reached: ${Math.floor(score)}m`;
+
+      levelChooser.value = currentLevel;
+      levelSelectBox.classList.remove("hidden");
+      menuBtnGroup.classList.remove("hidden");
+      nextLvlBtn.classList.add("hidden");
+      startBtn.textContent = "Drive Again";
+      startOverlay.classList.remove("hidden");
+    }
+
+    function update() {
+      if (keys.left && car.x > 20) car.x -= car.speedX;
+      if (keys.right && car.x < W - 20 - car.w) car.x += car.speedX;
+
+      const distInLevel = Math.max(0, score - levelStartScore);
+
+      const engineBonus = 1 + (carMods.engineLevel - 1) * 0.1;
+      const rateOfScaling = (0.005 + currentLevel * 0.001) * engineBonus;
+      
+      baseSpeed = START_SPEED + (distInLevel * rateOfScaling);
+
+      const brakePower = 0.45 / (1 + (carMods.brakeLevel - 1) * 0.15);
+      speed = keys.brake ? Math.max(2.5, baseSpeed * brakePower) : baseSpeed;
+
+      score += speed * 0.04;
+      roadOffset = (roadOffset + speed) % 40;
+
+      if (score >= levelGoalDistance - 25 && !finishLineSpawned) {
+        finishLineSpawned = true;
+        finishLineY = -40;
+      }
+
+      if (finishLineSpawned) {
+        finishLineY += speed;
+        if (finishLineY >= car.y) {
+          levelComplete();
+          return;
+        }
+      } else {
+        spawnTraffic();
+      }
+
+      for (let i = 0; i < traffic.length; i++) {
+        let v = traffic[i];
+        v.y += speed - v.speed;
+
+        if (isColliding(car, v)) {
+          endGame();
+          return;
+        }
+      }
+
+      traffic = traffic.filter(v => v.y < H + 100);
+
+      lvlVal.textContent = currentLevel;
+      distVal.textContent = `${Math.floor(score)} m`;
+      speedVal.textContent = `${Math.floor(speed * 10)} km/h`;
+    }
+
+    function drawCar(x, y, color, isPlayer = false) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(x, y, 30, 55, 6);
+      ctx.fill();
+
+      ctx.fillStyle = "#111111";
+      ctx.fillRect(x + 4, y + 15, 22, 22);
+
+      ctx.fillStyle = isPlayer ? "#f1c40f" : "#e74c3c";
+      ctx.fillRect(x + 3, isPlayer ? y + 2 : y + 50, 6, 3);
+      ctx.fillRect(x + 21, isPlayer ? y + 2 : y + 50, 6, 3);
+    }
+
+    function drawFinishLine(y) {
+      const squareSize = 10;
+      const roadWidth = W - 40;
+      const numCols = Math.ceil(roadWidth / squareSize);
+
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < numCols; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? "#ffffff" : "#000000";
+          ctx.fillRect(20 + c * squareSize, y + r * squareSize, squareSize, squareSize);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = "#21262d";
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = "#1b4332";
+      ctx.fillRect(0, 0, 20, H);
+      ctx.fillRect(W - 20, 0, 20, H);
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([20, 20]);
+      ctx.lineDashOffset = -roadOffset;
+
+      const laneW = (W - 40) / 3;
+      for (let i = 1; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(20 + i * laneW, 0);
+        ctx.lineTo(20 + i * laneW, H);
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+
+      if (finishLineSpawned) {
+        drawFinishLine(finishLineY);
+      }
+
+      drawCar(car.x, car.y, carMods.color, true);
+
+      for (const v of traffic) {
+        drawCar(v.x, v.y, v.color, false);
+      }
+    }
+
+    function loop() {
+      if (!isRunning || isPaused) return;
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
